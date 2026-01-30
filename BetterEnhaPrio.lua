@@ -214,9 +214,9 @@ local ActionsMono = {
 		end
 	end,
 
-	SR = function ()
+	SR = function (GCDduration)
 		-- do shamanistic rage
-		if isGCDReady(Spells.SR.name) and lowMana and melee then
+		if isGCDReady(Spells.SR.name, GCDduration) and lowMana and melee then
 			addToQueue(Spells.SR.name);
 		end
 	end,
@@ -385,12 +385,10 @@ end
 -- Gets time before the GCD is over
 local function getGCDduration()
 	local _, GCD = GetSpellCooldown(Spells.LB.name)  -- assume LB is baseline for GCD
-	if not GCD or GCD == 0 then
-        return 0
-    end
-	local _, _, latencyHome, latencyWorld = GetNetStats()
-	local latency = math.max(latencyHome, latencyWorld)/1000 + 0.015 -- 15ms safety
-	local GCDduration = GCD + latency
+	if not GCD then
+        return 0;
+    end;
+	return GCD;
 end
 
 -- refreshes the queue according to the priorities
@@ -457,8 +455,10 @@ function refreshQueue()
 
 	local GCDduration = getGCDduration()
   	-- now loop through the actions
+	local Actions = EnhaPrio.db.char.enableAOE and ActionsMono or ActionsAOE
+	local Priority = EnhaPrio.db.char.enableAOE and PriorityMono or PriorityAOE
 	for i, v in ipairs(Priority) do
-		Actions[v]();
+		Actions[v](GCDduration);
 	end
 end
 
