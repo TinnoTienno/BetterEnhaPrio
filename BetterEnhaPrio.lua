@@ -31,6 +31,7 @@
 
 This is the priority. You can change the order of these, if you think it necessary
 or comment out with "--" if not wanted. ]]
+
 Priority = {
 	"WF", -- weapon buffs (windfury)
 	"FT", -- weapon buffs (flametongue)
@@ -627,7 +628,7 @@ function EnhaPrio:OnInitialize()
 	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 	
 	-- register shit
-	self.db = LibStub("AceDB-3.0"):New("EnhaPrioDB", defaults, "char")
+	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
 	LibStub("AceConfig-3.0"):RegisterOptionsTable("EnhaPrio", self:GetOptions(), {"EnhaPrio", "fin"} )
 	self.optionsFrame = AceConfigDialog:AddToBlizOptions("EnhaPrio","EnhaPrio")
 	self.db:RegisterDefaults(defaults);
