@@ -1,0 +1,10 @@
+## Interface: 30300
+## Title: BetterEnhaPrio
+## Author: Noda
+## Notes: Better suggested spell priority for enhancement shamans
+## SavedVariables: BetterEnhaPrioDB
+## OptionalDeps: ACE3, ButtonFacade
+
+embeds.xml
+
+BetterEnhaPrio.lua
