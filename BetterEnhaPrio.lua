@@ -65,21 +65,21 @@ local mainFrame, target, skins;
 local maxQueueSize = 8;
 local queue = {};
 local cdqueue = {};
-hasMS = false;
-hasLS = false;
-hasMT = false;
-melee = false;
-ranged = false;
-fsLeft = 0;
-noSS = false;
-noLS = false;
-hostile = false;
-lowMana = false;
-hasMH = false;
-hasOH = false;
-timeLeft = 0;
-mwAmount = 0;
-isEnha = false;
+local hasMS = false;
+local hasLS = false;
+local hasMT = false;
+local melee = false;
+local ranged = false;
+local fsLeft = 0;
+local noSS = false;
+local noLS = false;
+local hostile = false;
+local lowMana = false;
+local hasMH = false;
+local hasOH = false;
+local timeLeft = 0;
+local mwAmount = 0;
+local isEnha = false;
 
 
 
@@ -163,11 +163,14 @@ local Actions = {
 	end,
 
 	LB = function ()
-		-- do lb, if 5 buffs
-		if hasMS and ranged then
-			addToQueue(Spells.LB.name);
-		end
-	end,
+    if hasMS and ranged then
+        if EnhaPrio.db.char.enableAOE then
+            addToQueue(Spells.CL.name);
+        else
+            addToQueue(Spells.LB.name);
+        end
+    end
+end,
 	
 	FS = function ()
 		-- if there is under 1.5sec left on flame shock on the target
@@ -232,7 +235,7 @@ local Cooldowns = {
 
 
 -- makes a queue of cooldowns
-function makeCDQueue()
+local function makeCDQueue()
 	local cdq = {};
 	for i, n in pairs(Cooldowns) do
 		if getCD(n) > 0 then
@@ -384,7 +387,7 @@ function refreshQueue()
   	end 
 	
 	-- ranges
-	melee = IsSpellInRange(Spells.LB.name, 'target') == 1; -- if you are in range of melee attacks (using flame shock here too... )
+	melee = IsSpellInRange(Spells.FS.name, 'target') == 1; -- if you are in range of melee attacks (using flame shock here too... )
 	ranged = IsSpellInRange(Spells.LB.name, 'target') == 1; -- if you are in range of flame shock
 
   	-- now loop through the actions
@@ -638,7 +641,7 @@ function EnhaPrio:OnInitialize()
 	self.db:RegisterDefaults(defaults);
 
 	-- create the main frame and configure it
-	mainFrame = CreateFrame("Frame","EnhaPrioDisplayFrame",UIParent)
+	mainFrame = CreateFrame("Frame","BetterEnhaPrioDisplayFrame",UIParent)
 	mainFrame:SetFrameStrata("BACKGROUND")
 	mainFrame:SetWidth(self.db.char.size)
 	mainFrame:SetHeight(self.db.char.size)
@@ -698,7 +701,7 @@ function EnhaPrio:OnInitialize()
 	mainFrame.wolf.id = 51533;
 	mainFrame.wolf.texture = mainFrame.wolf:CreateTexture(nil,"BACKGROUND");
 	mainFrame.wolf.texture:SetAllPoints(mainFrame.wolf);
-	--mainFrame.wolf.texture:SetTexture(GetSpellTexture("Feral Spirit"));
+	mainFrame.wolf.texture:SetTexture(GetSpellTexture("Feral Spirit"));
 	mainFrame.wolf:SetWidth(self.db.char.size / 2);
 	mainFrame.wolf:SetHeight(self.db.char.size / 2);
 	mainFrame.wolf:EnableMouse(false);
@@ -710,7 +713,7 @@ function EnhaPrio:OnInitialize()
 	mainFrame.elemental.id = 2894;
 	mainFrame.elemental.texture = mainFrame.elemental:CreateTexture(nil,"BACKGROUND");
 	mainFrame.elemental.texture:SetAllPoints(mainFrame.elemental);
-	--mainFrame.elemental.texture:SetTexture(GetSpellTexture("Fire Elemental Totem"));
+	mainFrame.elemental.texture:SetTexture(GetSpellTexture("Fire Elemental Totem"));
 	mainFrame.elemental:SetWidth(self.db.char.size / 2);
 	mainFrame.elemental:SetHeight(self.db.char.size / 2);
 	mainFrame.elemental:EnableMouse(false);
