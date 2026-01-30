@@ -293,6 +293,10 @@ local ActionsMono = {
 		if (MTduration - GCDduration < 3) then
 			addToQueue(Spells.MT.name);
 		end
+	end,
+
+	LSb = function ()
+		addToQueue(Spells.LS.name);
 	end
 }
 
@@ -376,13 +380,6 @@ local ActionsAOE = {
 		end
 	end,
 
-	LL = function (GCDduration)
-		-- lava lash
-		if isGCDReady(Spells.LL.name, GCDduration) and melee then
-			addToQueue(Spells.LL.name);
-		end
-	end,
-
 	MTb = function (GCDduration)
 		-- Magma totem
 		local _, _, start, duration = GetTotemInfo(1);
@@ -390,6 +387,17 @@ local ActionsAOE = {
 		if (MTduration - GCDduration < 3) then
 			addToQueue(Spells.MT.name);
 		end
+	end,
+
+	LL = function (GCDduration)
+		-- lava lash
+		if isGCDReady(Spells.LL.name, GCDduration) and melee then
+			addToQueue(Spells.LL.name);
+		end
+	end,
+
+	LSb = function ()
+		addToQueue(Spells.LS.name);
 	end
 }
 
