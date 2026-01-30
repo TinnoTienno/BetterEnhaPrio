@@ -34,22 +34,58 @@
 This is the priority. You can change the order of these, if you think it necessary
 or comment out with "--" if not wanted. ]]
 
-Priority = {
-	"WF", -- weapon buffs (windfury)
-	"FT", -- weapon buffs (flametongue)
-	
-	"SR", -- Shamanistic Rage when you have less than 20% mana
-	
-	"LB", -- Lightning Bolt if there are 5 Maelstrom stacks
-	"FS", -- Flame Shock if there's less than 1.5 sec left on the dot
-	"SSb", -- Stormstrike if there's no ss buff on the target
-	"LS", -- Lightning Shield if it isn't active on you
-	"MT", -- Magma Totem if you don't have one down
-	"ES", -- Earth Shock
-	"SS", -- Stormstrike even if there's a ss buff on the target
-	"LL", -- Lava Lash
-	"FN"  -- Fire Nova
+PriorityMono = {
+	"WF",      -- weapon buffs (windfury)
+    "FT",      -- weapon buffs (flametongue)
+    "SR",      -- low mana, cd check with GCD (Shamanistic Rage)
+    "LB",      -- MW=5 proc (Lightning Bolt)
+    "MT",      -- no fire totem (Magma Totem)
+    "SSb",     -- Stormstrike debuff missing (Stormstrike)
+    "LBb",     -- MW>3 && next swing + GCD allows LB (Lightning Bolt)
+    "FS",      -- Flame Shock missing (Flame Shock)
+    "LS",      -- Lightning Shield missing (Lightning Shield)
+    "SS",      -- Stormstrike cd ready (Stormstrike)
+    "ES",      -- Earth Shock if FS>6 sec (Earth Shock)
+    "FN",      -- Fire Nova if mana > 20% (Fire Nova)
+    "LL",      -- Lava Lash
+    "MTb",     -- Fire Totem duration < 3 sec (Magma Totem)
+    "LSb"		-- fallback (Lightning Shield)
 }
+
+PriorityAOE = {
+	"WF",       -- weapon buffs (windfury)
+    "FT",       -- weapon buffs (flametongue)
+    "SR",       -- low mana, cd check with GCD (Shamanistic Rage)
+    "MT",       -- no Fire Totem (Magma Totem)
+    "FN",       -- Fire Nova if mana > 20% (Fire Nova)
+    "CL",       -- MW=5 proc (Chain lightning)
+    "CLb",      -- MW>3 && timing swing + GCD allows CL (Chain lightning)
+    "SSb",      -- Stormstrike debuff missing (Stormstrike)
+    "FS",       -- Flame Shock missing (Flame Shock)
+    "LS",       -- Lightning Shield missing (Lightning Shield)
+    "SS",       -- Stormstrike cd ready (Stormstrike)
+    "ES",       -- Earth Shock if FS>6 sec (Earth Shock)
+    "MTb",      -- Fire Totem duration < 3 sec (Magma Totem)
+    "LL",       -- Lava Lash
+    "LSb"  -- fallback Lightning Shield (Lightning Shield)
+}
+
+-- Priority = {
+-- 	"WF", -- weapon buffs (windfury)
+-- 	"FT", -- weapon buffs (flametongue)
+	
+-- 	"SR", -- Shamanistic Rage when you have less than 20% mana
+	
+-- 	"LB", -- Lightning Bolt if there are 5 Maelstrom stacks
+-- 	"FS", -- Flame Shock if there's less than 1.5 sec left on the dot
+-- 	"SSb", -- Stormstrike if there's no ss buff on the target
+-- 	"LS", -- Lightning Shield if it isn't active on you
+-- 	"MT", -- Magma Totem if you don't have one down
+-- 	"ES", -- Earth Shock
+-- 	"SS", -- Stormstrike even if there's a ss buff on the target
+-- 	"LL", -- Lava Lash
+-- 	"FN"  -- Fire Nova
+-- }
 
 
 --[[ Ok, don't mess with anything below this (unless you know what you're doing ofc) ]]--
@@ -65,23 +101,36 @@ local mainFrame, target, skins;
 local maxQueueSize = 8;
 local queue = {};
 local cdqueue = {};
-local hasMS = false;
-local hasLS = false;
-local hasMT = false;
-local melee = false;
-local ranged = false;
-local fsLeft = 0;
-local noSS = false;
-local noLS = false;
-local hostile = false;
-local lowMana = false;
-local hasMH = false;
-local hasOH = false;
-local timeLeft = 0;
-local mwAmount = 0;
+
+-- Conditionning
 local isEnha = false;
 
+-- targets 
+local melee = false;
+local ranged = false;
+local hostile = false;
 
+-- weapons enchants
+local hasMH = false;
+local hasOH = false;
+
+-- for SR and FN
+local lowMana = false;
+-- for MW==5
+local hasMWfull = false;
+-- for Magma totem
+local noFT = false;
+-- for Stormstrike bonus
+local noSS = false;
+-- for MW>=3
+local hasMW = false;
+-- for Flame Strike
+local fsLeft = 0;
+-- for Lightning shield
+local noLS = false;
+
+local timeLeft = 0;
+local mwAmount = 0;
 
 
 -- button facade
@@ -368,7 +417,7 @@ function refreshQueue()
 	
 	-- totems (magma or elemental)
 	local _, totemName = GetTotemInfo(1);	
-	if totemName == "Magma Totem VII" or totemName == Spells.FE.name then
+	if totemName == "Totem de magma VII" or totemName == Spells.FE.name then
 		hasMT = true;
 	else
 		hasMT = false;
@@ -429,7 +478,7 @@ function EnhaPrio:reCalculate()
 		    mainFrame.text:SetText("");
 	    end
 	    
-	    if not self.db.char.enableAOE and ranged then
+	    if self.db.char.enableAOE and ranged then
 			mainFrame.AOEtext:SetText("AOE");
 		else
             mainFrame.AOEtext:SetText("");
