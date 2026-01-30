@@ -102,6 +102,8 @@ local maxQueueSize = 8;
 local queue = {};
 local cdqueue = {};
 
+local safety = 0.015;
+
 -- Conditionning
 local isEnha = false;
 
@@ -188,6 +190,14 @@ local Spells = {
 	WV = {id = 51533, name = GetSpellInfo(51533)}, -- Feral Spirits
 }
 
+local function isGCDReady(spellName, GCDduration)
+    local start, duration = GetSpellCooldown(spellName)
+    local cdLeft = (start + duration) - GetTime()
+    local _, _, latencyHome, latencyWorld = GetNetStats()
+    local latency = math.max(latencyHome, latencyWorld)/1000 + safety -- 15ms safety
+
+    return cdLeft - GCDduration - latency <= 0
+end
 
 -- here are the different actions (adding stuff to queue according to the situation)
 local ActionsMono = {
@@ -206,7 +216,7 @@ local ActionsMono = {
 
 	SR = function ()
 		-- do shamanistic rage
-		if isCastable(Spells.SR.name) and lowMana and melee then
+		if isGCDReady(Spells.SR.name) and lowMana and melee then
 			addToQueue(Spells.SR.name);
 		end
 	end,
@@ -219,22 +229,22 @@ end,
 	
 	MT = function ()
 		-- magma totem
-		if noFT and melee and EnhaPrio.db.char.enableAOE then
+		if noFT then
 			addToQueue(Spells.MT.name);
 		end
 	end, 
+
+	SSb = function ()
+		-- if the target doesn't have your ss buff on, do it
+		if noSS and isCastable(Spells.SS.name) and melee then
+			addToQueue(Spells.SS.name);
+		end
+	end,
 
 	FS = function ()
 		-- if there is under 1.5sec left on flame shock on the target
 		if isCastable(Spells.FS.name) and ranged and fsLeft <= 3 then
 			addToQueue(Spells.FS.name);
-		end
-	end,
-	
-	SSb = function ()
-		-- if the target doesn't have your ss buff on, do it
-		if noSS and isCastable(Spells.SS.name) and melee then
-			addToQueue(Spells.SS.name);
 		end
 	end,
 	
@@ -372,6 +382,16 @@ function round(num, idp)
   return math.floor(num * mult + 0.5) / mult
 end
 
+-- Gets time before the GCD is over
+local function getGCDduration()
+	local _, GCD = GetSpellCooldown(Spells.LB.name)  -- assume LB is baseline for GCD
+	if not GCD or GCD == 0 then
+        return 0
+    end
+	local _, _, latencyHome, latencyWorld = GetNetStats()
+	local latency = math.max(latencyHome, latencyWorld)/1000 + 0.015 -- 15ms safety
+	local GCDduration = GCD + latency
+end
 
 -- refreshes the queue according to the priorities
 -- check stuff and then run the queue
@@ -435,6 +455,7 @@ function refreshQueue()
 	melee = IsSpellInRange(Spells.SS.name, 'target') == 1; -- if you are in range of melee attacks (using flame shock here too... )
 	ranged = IsSpellInRange(Spells.LB.name, 'target') == 1; -- if you are in range of flame shock
 
+	local GCDduration = getGCDduration()
   	-- now loop through the actions
 	for i, v in ipairs(Priority) do
 		Actions[v]();
