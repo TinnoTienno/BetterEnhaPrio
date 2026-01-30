@@ -9,6 +9,7 @@
 
     SS - Stormstrike
     LB - Lightning Bolt
+	CL - Chain Lightning
     FS - Flame Shock
     LS - Lightning Shield
     MT - Magma Totem
@@ -21,6 +22,7 @@
     FN - Fire Nova
     FE - Fire Elemental Totem
     SR - Shamanistic Rage
+	WV - Feral Spirits (Wolves)
 
     This addon doesn't take long cooldown abilities like Feral Spirit or
     Fire Elemental into account. Usage of those skills is up to you (they
@@ -120,19 +122,21 @@ local defaults = {
 
 -- the spells we'll be using
 local Spells = {
-	SS = {id = 17364, name = GetSpellInfo(17364)},
-	LL = {id = 60103, name = GetSpellInfo(60103)},
-	ES = {id = 49231, name = GetSpellInfo(49231)},
-	MS = {id = 51532, name = GetSpellInfo(51532)},
-	WF = {id = 25505, name = GetSpellInfo(58804)},
-	FT = {id = 25489, name = GetSpellInfo(58790)},
-	LB = {id = 49238, name = GetSpellInfo(49238)},
-	LS = {id = 49281, name = GetSpellInfo(49281)},
-	SR = {id = 30823, name = GetSpellInfo(30823)},
-	FE = {id = 2894, name = GetSpellInfo(2894)},
-	FS = {id = 49233, name = GetSpellInfo(49233)},
-	MT = {id = 58734, name = GetSpellInfo(58734)},
-	FN = {id = 61654, name = GetSpellInfo(61654)},
+	SS = {id = 17364, name = GetSpellInfo(17364)}, -- StormStrike
+	LL = {id = 60103, name = GetSpellInfo(60103)}, -- LavaLash
+	ES = {id = 49231, name = GetSpellInfo(49231)}, -- EarthShock
+	FS = {id = 49233, name = GetSpellInfo(49233)}, -- Fire Shock
+	MS = {id = 51532, name = GetSpellInfo(51532)}, -- Maelstrom Weapon
+	WF = {id = 25505, name = GetSpellInfo(58804)}, -- WindFury enchant
+	FT = {id = 25489, name = GetSpellInfo(58790)}, -- Flametongue Weapon
+	LB = {id = 49238, name = GetSpellInfo(49238)}, -- Lightning Bolt
+	CL = {id = 49271, name = GetSpellInfo(49271)}, -- Chain Lightning
+	FN = {id = 61654, name = GetSpellInfo(61654)}, -- Fire Nova
+	LS = {id = 49281, name = GetSpellInfo(49281)}, -- Lightning Shield
+	SR = {id = 30823, name = GetSpellInfo(30823)}, -- Shamanistic Rage
+	FE = {id = 2894, name = GetSpellInfo(2894)}, -- Fire Elemental Totem
+	MT = {id = 58734, name = GetSpellInfo(58734)}, -- Magma Totem
+	WV = {id = 51533, name = GetSpellInfo(51533)}, -- Feral Spirits
 }
 
 
@@ -628,7 +632,7 @@ function EnhaPrio:OnInitialize()
 	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 	
 	-- register shit
-	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
+	self.db = LibStub("AceDB-3.0"):New("EnhaPrioDB", defaults, "char")
 	LibStub("AceConfig-3.0"):RegisterOptionsTable("EnhaPrio", self:GetOptions(), {"EnhaPrio", "fin"} )
 	self.optionsFrame = AceConfigDialog:AddToBlizOptions("EnhaPrio","EnhaPrio")
 	self.db:RegisterDefaults(defaults);
