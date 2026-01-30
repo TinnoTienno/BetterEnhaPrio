@@ -190,7 +190,7 @@ local Spells = {
 
 
 -- here are the different actions (adding stuff to queue according to the situation)
-local Actions = {
+local ActionsMono = {
 
 	WF = function ()
 		if not hasMH then
@@ -213,11 +213,7 @@ local Actions = {
 
 	LB = function ()
     if hasMS and ranged then
-        if EnhaPrio.db.char.enableAOE then
-            addToQueue(Spells.CL.name);
-        else
-            addToQueue(Spells.LB.name);
-        end
+        addToQueue(Spells.LB.name);
     end
 end,
 	
@@ -436,7 +432,7 @@ function refreshQueue()
   	end 
 	
 	-- ranges
-	melee = IsSpellInRange(Spells.FS.name, 'target') == 1; -- if you are in range of melee attacks (using flame shock here too... )
+	melee = IsSpellInRange(Spells.SS.name, 'target') == 1; -- if you are in range of melee attacks (using flame shock here too... )
 	ranged = IsSpellInRange(Spells.LB.name, 'target') == 1; -- if you are in range of flame shock
 
   	-- now loop through the actions
