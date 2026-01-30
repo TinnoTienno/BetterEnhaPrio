@@ -217,6 +217,13 @@ local ActionsMono = {
     end
 end,
 	
+	MT = function ()
+		-- magma totem
+		if noFT and melee and EnhaPrio.db.char.enableAOE then
+			addToQueue(Spells.MT.name);
+		end
+	end, 
+
 	FS = function ()
 		-- if there is under 1.5sec left on flame shock on the target
 		if isCastable(Spells.FS.name) and ranged and fsLeft <= 3 then
@@ -237,13 +244,6 @@ end,
 			addToQueue(Spells.LS.name);
 		end
 	end,
-	
-	MT = function ()
-		-- magma totem
-		if not hasMT and melee and EnhaPrio.db.char.enableAOE then
-			addToQueue(Spells.MT.name);
-		end
-	end, 
 	
 	ES = function ()
 		-- earth shock
@@ -411,12 +411,12 @@ function refreshQueue()
 		end
 	end
 	
-	-- totems (magma or elemental)
+	-- totems (magma or elemental) -- still need to drop the name as string
 	local _, totemName = GetTotemInfo(1);	
 	if totemName == "Totem de magma VII" or totemName == Spells.FE.name then
-		hasMT = true;
+		noFT = false;
 	else
-		hasMT = false;
+		noFT = true;
 	end
 	
 	-- weapon buffs
