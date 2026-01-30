@@ -13,4 +13,5 @@ To provide an extensive priority management on the enhancement shaman.
 - good priority management for Magma Totem, Fire Elemental Totem, Feral Spirits, Racial CD, Profession CDs, Trinket CDs
 - Add Lightning Bolt weaving mechanics -> precisely track both hands swings and add Lightning bolts to priority if it fits between auto-attacks
 - A predictive management using GCD to anticipate on the next priority
-- Btter AOE-Single target management
+- Better AOE-Single target Modes with the addition of Chain lightning in the interface
+    - Adding a switch between modes using Lightning Bold and Chain Lightning to track what mode we're using
