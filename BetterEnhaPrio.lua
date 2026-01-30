@@ -222,10 +222,10 @@ local ActionsMono = {
 	end,
 
 	LB = function ()
-    if hasMS and ranged then
-        addToQueue(Spells.LB.name);
-    end
-end,
+    	if hasMWfull and ranged then
+        	addToQueue(Spells.LB.name);
+    	end
+	end,
 	
 	MT = function ()
 		-- magma totem
@@ -234,16 +234,19 @@ end,
 		end
 	end, 
 
-	SSb = function ()
+	SSb = function (GCDduration)
 		-- if the target doesn't have your ss buff on, do it
-		if noSS and isCastable(Spells.SS.name) and melee then
+		if noSS and isGCDReady(Spells.SS.name, GCDduration) and melee then
 			addToQueue(Spells.SS.name);
 		end
 	end,
 
-	FS = function ()
+	LBb = function()
+	end,
+
+	FS = function (GCDduration)
 		-- if there is under 1.5sec left on flame shock on the target
-		if isCastable(Spells.FS.name) and ranged and fsLeft <= 3 then
+		if isGCDReady(Spells.FS.name, GCDduration) and ranged and fsLeft <= 3 then
 			addToQueue(Spells.FS.name);
 		end
 	end,
@@ -255,33 +258,139 @@ end,
 		end
 	end,
 	
-	ES = function ()
+	SS = function (GCDduration) 
+		-- Stormstrike
+		if isGCDReady(Spells.SS.name, GCDduration) and melee then
+			addToQueue(Spells.SS.name);
+		end
+	end,
+
+	ES = function (GCDduration)
 		-- earth shock
-		if isCastable(Spells.ES.name) and ranged and fsLeft > 3 then
+		if isGCDReady(Spells.ES.name, GCDduration) and ranged and fsLeft > 6 then
 			addToQueue(Spells.ES.name);
 		end
 	end,
 	
-	SS = function () 
-		-- Stormstrike
-		if not noSS and isCastable(Spells.SS.name) and melee then
+	FN = function (GCDduration)
+		-- fire nova
+		if isGCDReady(Spells.FN.name, GCDduration) and not noFT then
+			addToQueue(Spells.FN.name);
+		end
+	end,
+
+	LL = function (GCDduration)
+		-- lava lash
+		if isGCDReady(Spells.LL.name, GCDduration) and melee then
+			addToQueue(Spells.LL.name);
+		end
+	end,
+
+	MTb = function (GCDduration)
+		-- Magma totem
+		local _, _, start, duration = GetTotemInfo(1);
+		local MTduration = start + duration - GetTime();
+		if (MTduration - GCDduration < 3) then
+			addToQueue(Spells.MT.name);
+		end
+	end
+}
+
+local ActionsAOE = {
+
+	WF = function ()
+		if not hasMH then
+			addToQueue(Spells.WF.name);
+		end
+	end,
+	
+	FT = function ()
+		if not hasOH then
+			addToQueue(Spells.FT.name);
+		end
+	end,
+
+	SR = function (GCDduration)
+		-- do shamanistic rage
+		if isGCDReady(Spells.SR.name, GCDduration) and lowMana and melee then
+			addToQueue(Spells.SR.name);
+		end
+	end,
+	
+	MT = function ()
+		-- magma totem
+		if noFT then
+			addToQueue(Spells.MT.name);
+		end
+	end,
+
+	FN = function (GCDduration)
+		-- fire nova
+		if isGCDReady(Spells.FN.name, GCDduration) and not lowMana and not noFT then
+			addToQueue(Spells.FN.name);
+		end
+	end,
+
+	CL = function ()
+    	if hasMWfull and ranged then
+        	addToQueue(Spells.CL.name);
+    	end
+	end,
+
+	-- still need to be completed
+	CLb = function ()
+	end,
+
+	SSb = function (GCDduration)
+		-- if the target doesn't have your ss buff on, do it
+		if noSS and isGCDReady(Spells.SS.name, GCDduration) and melee then
 			addToQueue(Spells.SS.name);
 		end
 	end,
-	
-	LL = function ()
-		-- lava lash
-		if isCastable(Spells.LL.name) and melee then
-			addToQueue(Spells.LL.name);
-		end	
+
+	FS = function (GCDduration)
+		-- if there is under 1.5sec left on flame shock on the target
+		if isGCDReady(Spells.FS.name, GCDduration) and ranged and fsLeft <= 3 then
+			addToQueue(Spells.FS.name);
+		end
 	end,
 	
-	FN = function ()
-		-- fire nova
-		if isCastable(Spells.FN.name) and hasMT and EnhaPrio.db.char.enableAOE then
-			addToQueue(Spells.FN.name);
+	LS = function ()
+		-- lightningshield
+		if noLS then
+			addToQueue(Spells.LS.name);
 		end
-	end		
+	end,
+	
+	SS = function (GCDduration) 
+		-- Stormstrike
+		if isGCDReady(Spells.SS.name, GCDduration) and melee then
+			addToQueue(Spells.SS.name);
+		end
+	end,
+
+	ES = function (GCDduration)
+		-- earth shock
+		if isGCDReady(Spells.ES.name, GCDduration) and ranged and fsLeft > 6 then
+			addToQueue(Spells.ES.name);
+		end
+	end,
+
+	LL = function (GCDduration)
+		-- lava lash
+		if isGCDReady(Spells.LL.name, GCDduration) and melee then
+			addToQueue(Spells.LL.name);
+		end
+	end,
+
+	MTb = function (GCDduration)
+		-- Magma totem
+		local _, _, start, duration = GetTotemInfo(1);
+		local MTduration = start + duration - GetTime();
+		if (MTduration - GCDduration < 3) then
+			addToQueue(Spells.MT.name);
+		end
+	end
 }
 
 local Cooldowns = {	
@@ -397,7 +506,8 @@ function refreshQueue()
 	
 	-- players buffs (maelstrom, lightning shield)
 	noLS = true;
-	hasMS = false;
+	hasMWfull = false;
+	hasMW = false;
 	mwAmount = 0;
 	for i=1,40 do
 		local name, _, _, count = UnitBuff("player", i);
@@ -407,7 +517,9 @@ function refreshQueue()
 		if name == Spells.MS.name then
 		    mwAmount = count;
 			if count == 5 then
-				hasMS = true;
+				hasMWfull = true;
+			elseif count >= 3 then;
+				hasMW = true;
 			end
 		elseif name == Spells.LS.name then
 			noLS = false;
