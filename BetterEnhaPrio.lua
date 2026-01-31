@@ -126,6 +126,18 @@ local noFT = false;
 local noSS = false;
 -- for MW>=3
 local hasMW = false;
+
+local SwingTracker = {
+    currentSlot = 1,        -- 1 ou 2 (alternance)
+    identified = false,     -- OH identifié avec certitude
+    isFireTongued = false,  -- FT détectée depuis le dernier reset
+
+    hands = {
+        [1] = { timestamp = nil, name = nil }, -- MH ou OH
+        [2] = { timestamp = nil, name = nil }
+    }
+}
+
 -- for Flame Strike
 local fsLeft = 0;
 -- for Lightning shield
@@ -133,6 +145,7 @@ local noLS = false;
 
 local timeLeft = 0;
 local mwAmount = 0;
+
 
 
 -- button facade
@@ -188,13 +201,14 @@ local Spells = {
 	FE = {id = 2894, name = GetSpellInfo(2894)}, -- Fire Elemental Totem
 	MT = {id = 58734, name = GetSpellInfo(58734)}, -- Magma Totem
 	WV = {id = 51533, name = GetSpellInfo(51533)}, -- Feral Spirits
+	FT_PROC = {id = 68111, name = GetSpellInfo(68111)},
 }
 
 local function isGCDReady(spellName, GCDduration)
     local start, duration = GetSpellCooldown(spellName)
     local cdLeft = (start + duration) - GetTime()
-    local _, _, latencyHome, latencyWorld = GetNetStats()
-    local latency = math.max(latencyHome, latencyWorld)/1000 + safety -- 15ms safety
+    local _, _, latencyHome, _ = GetNetStats()
+    local latency = latencyHome/1000 + safety -- 15ms safety
 
     return cdLeft - GCDduration - latency <= 0
 end
@@ -335,8 +349,8 @@ local ActionsAOE = {
 		end
 	end,
 
-	CL = function ()
-    	if hasMWfull and ranged then
+	CL = function (GCDduration)
+    	if hasMWfull and isGCDReady(Spells.CL.name, GCDduration) and ranged then
         	addToQueue(Spells.CL.name);
     	end
 	end,
@@ -427,6 +441,7 @@ local function makeCDQueue()
 		
 			if a == "SS" and ssDebuff then a = "SSb" end
 			if b == "SS" and ssDebuff then b = "SSb" end
+			local Priority = EnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
 			
 		  	for i, v in ipairs(Priority) do
 		  		if v == a then av = i end
@@ -526,7 +541,7 @@ function refreshQueue()
 		    mwAmount = count;
 			if count == 5 then
 				hasMWfull = true;
-			elseif count >= 3 then;
+			elseif count >= 3 then
 				hasMW = true;
 			end
 		elseif name == Spells.LS.name then
@@ -575,8 +590,8 @@ function refreshQueue()
 
 	local GCDduration = getGCDduration()
   	-- now loop through the actions
-	local Actions = EnhaPrio.db.char.enableAOE and ActionsMono or ActionsAOE
-	local Priority = EnhaPrio.db.char.enableAOE and PriorityMono or PriorityAOE
+	local Actions = EnhaPrio.db.char.enableAOE and ActionsAOE or ActionsMono
+	local Priority = EnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
 	for i, v in ipairs(Priority) do
 		Actions[v](GCDduration);
 	end
@@ -614,13 +629,6 @@ function EnhaPrio:reCalculate()
 		else
 		    mainFrame.text:SetText("");
 	    end
-	    
-	    if self.db.char.enableAOE and ranged then
-			mainFrame.AOEtext:SetText("AOE");
-		else
-            mainFrame.AOEtext:SetText("");
-		end
-	    
 	    
 	    -- wolf and ele
 	    if self.db.char.enableLongCD then
@@ -725,11 +733,7 @@ end
 -- change the aoe setting
 function EnhaPrio:ChangeAOE()
 	self.db.char.enableAOE = not self.db.char.enableAOE;
-	if not self.db.char.enableAOE and ranged then
-		mainFrame.AOEtext:SetText("AOE");
-	else 
-		mainFrame.AOEtext:SetText("");
-	end
+	self:UpdateAOEText();
 end
 
 function EnhaPrio:RepositionFrames(queue)
@@ -941,9 +945,14 @@ function EnhaPrio:OnEnable()
 		self:PLAYER_TARGET_CHANGED(); -- check target self:RecalcMode();
 		
 		-- Register for Function Events
-		self:UnregisterAllEvents();
+		-- self:UnregisterAllEvents();
+		swPrint("Mode ");
+
 		self:RegisterEvent("PLAYER_TARGET_CHANGED");
 		self:RegisterEvent("SPELL_UPDATE_COOLDOWN");
+		self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
+		self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
+		self:UpdateAOEText();
 		mainFrame:SetScript('OnUpdate', function(self, timeSinceLast)
 			timeLeft = timeLeft - timeSinceLast;
 			if timeLeft <= 0 then
@@ -996,6 +1005,22 @@ function EnhaPrio:SetProperty(info, newValue)
 	end 
 end
 
+function EnhaPrio:UpdateAOEText()
+    mainFrame.AOEtext:SetText(self.db.char.enableAOE and "AOE" or "")
+end
+
+local function ResetSwingTracker()
+    SwingTracker.currentSlot = 1
+    SwingTracker.identified = false
+    SwingTracker.isFireTongued = false
+
+    for i = 1, 2 do
+        SwingTracker.hands[i].timestamp = nil
+        SwingTracker.hands[i].name = nil
+    end
+	swPrint("SwingTracker reset");
+end
+
 function EnhaPrio:PLAYER_TARGET_CHANGED(...) 
   hostile = UnitName("target") and UnitCanAttack("player","target") and UnitHealth("target") > 0;
   timeLeft = 0;
@@ -1013,6 +1038,112 @@ function EnhaPrio:SPELL_UPDATE_COOLDOWN(...)
 	        CooldownFrame_SetTimer(spellQueueFrames[1].cooldown, GCDstart, GCD, 1);
 	 	end
 	end
+end
+
+function EnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
+    if unitID ~= "player" then 
+		return 
+	end
+    if spell == Spells.CL.name then
+        self.db.char.enableAOE = true
+    elseif spell == Spells.LB.name then
+        self.db.char.enableAOE = false
+	elseif spell == Spells.FT.name then
+        SwingTracker.isFireTongued = true
+	elseif spell == Spells.LL.name then
+        SwingTracker.hands[2].timestamp = GetTime()
+        SwingTracker.hands[2].name = "OH"
+        SwingTracker.identified = true
+        SwingTracker.currentSlot = 1
+		swPrint("OH identified");
+    elseif spell == Spells.SS.name then
+        ResetSwingTracker();
+    end
+	self:UpdateAOEText()
+end
+
+local function IsTimingInvalid(expected, actual, speed)
+    if not expected then return false end
+
+    local delta = math.abs(actual - expected)
+
+    -- seuil dynamique + seuil hard
+    return delta > (speed * 0.4) or delta > 0.6
+end
+
+local function HandleSwingEvent(timestamp)
+    local now = timestamp
+    local slot = SwingTracker.currentSlot
+    local hand = SwingTracker.hands[slot]
+
+
+	swPrint("hand")
+	swPrint(slot);
+	swPrint("hand.timestamp");
+	swPrint(hand.timestamp);
+	swPrint("hand.name")
+	swPrint(hand.name)
+	-- -- Protects from longer afk
+	-- if now - (SwingTracker.hands[1].timestamp or 0) > 4
+	-- 	and now - (SwingTracker.hands[2].timestamp or 0) > 4 then
+    -- 	ResetSwingTracker()
+	-- 	swPrint("afk")
+   	--  	return
+	-- end
+
+    -- if hand is identified -> check timing
+    if hand.name and hand.timestamp then
+        local speed = (hand.name == "MH") and UnitAttackSpeed("player") or select(2, UnitAttackSpeed("player"))
+        local expected = hand.timestamp + speed
+		if (hand.name == "MH") then
+			swPrint("MH")
+		else
+			swPrint("OH");
+		end
+        if IsTimingInvalid(expected, now, speed) then
+            ResetSwingTracker()
+            return
+        end
+    end
+
+    -- identification logique
+    if not hand.name then
+        if SwingTracker.identified then
+            hand.name = "MH"
+			swPrint("MH identified");
+        elseif SwingTracker.isFireTongued then
+            hand.name = "OH"
+            SwingTracker.identified = true
+			swPrint("OH identified");
+        end
+    end
+
+    hand.timestamp = now
+    SwingTracker.currentSlot = (slot == 1) and 2 or 1
+end
+
+
+function EnhaPrio:COMBAT_LOG_EVENT_UNFILTERED(...)
+    local q1,
+          timestamp,
+          subEvent,
+          sourceGUID,
+          sourceName,
+          q6,
+          q7,
+          q8,
+          q9,
+          q10, 
+          spellName = ...
+    if sourceGUID ~= UnitGUID("player") then return end
+	if (subEvent == "SPELL_DAMAGE" or subEvent == "SPELL_MISSED") and not SwingTracker.isFireTongued then
+        if spellName == Spells.FT_PROC.name then
+            SwingTracker.isFireTongued = true
+            SwingTracker.lastFireTongue = timestamp
+        end
+    elseif subEvent == "SWING_DAMAGE" or subEvent == "SWING_MISSED" then
+        HandleSwingEvent(timestamp);
+    end
 end
 
 function EnhaPrio:GetOptions()
