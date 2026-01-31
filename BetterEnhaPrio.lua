@@ -128,14 +128,12 @@ local noSS = false;
 local hasMW = false;
 
 local SwingTracker = {
-    currentSlot = 1,        -- 1 ou 2 (alternance)
-    identified = false,     -- OH identifié avec certitude
-    isFireTongued = false,  -- FT détectée depuis le dernier reset
-
     hands = {
-        [1] = { timestamp = nil, name = nil }, -- MH ou OH
-        [2] = { timestamp = nil, name = nil }
-    }
+        MH = { name = "MH", lasttimestamp = nil, nextTimeStamp = nil},
+        OH = { name = "OH", lasttimestamp = nil, nextTimeStamp = nil}
+    },
+	IgnoreNextFT = false,
+	IgnoreTimestamp = 0
 }
 
 -- for Flame Strike
@@ -1010,14 +1008,12 @@ function EnhaPrio:UpdateAOEText()
 end
 
 local function ResetSwingTracker()
-    SwingTracker.currentSlot = 1
-    SwingTracker.identified = false
-    SwingTracker.isFireTongued = false
-
-    for i = 1, 2 do
-        SwingTracker.hands[i].timestamp = nil
-        SwingTracker.hands[i].name = nil
-    end
+    SwingTracker.hands.MH.lasttimestamp = nil
+    SwingTracker.hands.MH.nexttimestamp = nil
+    SwingTracker.hands.MH.name = nil    
+	SwingTracker.hands.OH.lasttimestamp = nil
+	SwingTracker.hands.OH.nexttimestamp = nil
+    SwingTracker.hands.OH.name = nil
 	swPrint("SwingTracker reset");
 end
 
@@ -1048,80 +1044,73 @@ function EnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
         self.db.char.enableAOE = true
     elseif spell == Spells.LB.name then
         self.db.char.enableAOE = false
-	elseif spell == Spells.FT.name then
-        SwingTracker.isFireTongued = true
+	elseif spell == Spells.SS.name then
+		SwingTracker.IgnoreNextFT = true;
+		SwingTracker.IgnoreTimestamp = GetTime();
 	elseif spell == Spells.LL.name then
-        SwingTracker.hands[2].timestamp = GetTime()
-        SwingTracker.hands[2].name = "OH"
-        SwingTracker.identified = true
-        SwingTracker.currentSlot = 1
-		swPrint("OH identified");
-    elseif spell == Spells.SS.name then
-        ResetSwingTracker();
-    end
+		SwingTracker.IgnoreNextFT = true;
+		SwingTracker.IgnoreTimestamp = GetTime();
+	end
 	self:UpdateAOEText()
 end
 
-local function IsTimingInvalid(expected, actual, speed)
+local function IsTimingInvalid(expected, actual)
     if not expected then return false end
 
     local delta = math.abs(actual - expected)
+    return delta > 0.4
+end
 
-    -- seuil dynamique + seuil hard
-    return delta > (speed * 0.4) or delta > 0.6
+local function getHand(timestamp)
+	if (not SwingTracker.hands.MH.lasttimestamp) then
+		return "MH";
+	elseif (not SwingTracker.hands.OH.lasttimestamp) then 
+		return "OH";
+	end;
+	if (math.abs(timestamp - SwingTracker.hands.MH.nextTimeStamp) < math.abs(timestamp - SwingTracker.hands.OH.nextTimeStamp)) then
+		if IsTimingInvalid(SwingTracker.hands.MH.nextTimeStamp, timestamp)then
+			swPrint("Invalid timing1".." OH "..SwingTracker.hands.MH.nextTimeStamp.." TS "..timestamp)
+			ResetSwingTracker();
+		end
+		return "MH";
+	else
+		if IsTimingInvalid(SwingTracker.hands.OH.nextTimeStamp, timestamp)then
+			swPrint("Invalid timing2".." OH "..SwingTracker.hands.OH.nextTimeStamp.." TS "..timestamp)
+			ResetSwingTracker();
+			return "MH";
+		else
+			return "OH";
+		end
+	end
 end
 
 local function HandleSwingEvent(timestamp)
-    local now = timestamp
-    local slot = SwingTracker.currentSlot
-    local hand = SwingTracker.hands[slot]
-
-
-	swPrint("hand")
-	swPrint(slot);
-	swPrint("hand.timestamp");
-	swPrint(hand.timestamp);
-	swPrint("hand.name")
-	swPrint(hand.name)
-	-- -- Protects from longer afk
-	-- if now - (SwingTracker.hands[1].timestamp or 0) > 4
-	-- 	and now - (SwingTracker.hands[2].timestamp or 0) > 4 then
-    -- 	ResetSwingTracker()
-	-- 	swPrint("afk")
-   	--  	return
-	-- end
-
-    -- if hand is identified -> check timing
-    if hand.name and hand.timestamp then
-        local speed = (hand.name == "MH") and UnitAttackSpeed("player") or select(2, UnitAttackSpeed("player"))
-        local expected = hand.timestamp + speed
-		if (hand.name == "MH") then
-			swPrint("MH")
-		else
-			swPrint("OH");
-		end
-        if IsTimingInvalid(expected, now, speed) then
-            ResetSwingTracker()
-            return
-        end
-    end
-
-    -- identification logique
-    if not hand.name then
-        if SwingTracker.identified then
-            hand.name = "MH"
-			swPrint("MH identified");
-        elseif SwingTracker.isFireTongued then
-            hand.name = "OH"
-            SwingTracker.identified = true
-			swPrint("OH identified");
-        end
-    end
-
-    hand.timestamp = now
-    SwingTracker.currentSlot = (slot == 1) and 2 or 1
+	local hand = getHand(timestamp);
+	if (hand == "MH") then
+		SwingTracker.hands.MH.lasttimestamp = timestamp;
+		local mhSpeed, _ = UnitAttackSpeed("player");
+		SwingTracker.hands.MH.nextTimeStamp = timestamp + mhSpeed;
+		swPrint("Setting MH");
+	else
+		SwingTracker.hands.OH.lasttimestamp = timestamp;
+		local _, ohSpeed_ = UnitAttackSpeed("player");
+		SwingTracker.hands.OH.nextTimeStamp = timestamp + ohSpeed_;
+		swPrint("Setting OH");
+	end
 end
 
+local function GetLastSwingHand()
+    if not SwingTracker.hands.OH.lasttimestamp then
+        return nil
+    end
+    local ts1 = SwingTracker.hands.MH.lasttimestamp or 0
+    local ts2 = SwingTracker.hands.OH.lasttimestamp
+    if ts2 > ts1 then
+        return "OH"
+    else
+        return "MH"
+    end
+end
 
 function EnhaPrio:COMBAT_LOG_EVENT_UNFILTERED(...)
     local q1,
@@ -1138,8 +1127,14 @@ function EnhaPrio:COMBAT_LOG_EVENT_UNFILTERED(...)
     if sourceGUID ~= UnitGUID("player") then return end
 	if (subEvent == "SPELL_DAMAGE" or subEvent == "SPELL_MISSED") and not SwingTracker.isFireTongued then
         if spellName == Spells.FT_PROC.name then
-            SwingTracker.isFireTongued = true
-            SwingTracker.lastFireTongue = timestamp
+			if not (SwingTracker.IgnoreNextFT or timestamp - SwingTracker.IgnoreTimestamp > 0.2) then
+				if GetLastSwingHand() ~= "OH" then
+					swPrint("Wrong firetongue")
+					ResetSwingTracker()
+				end
+			else
+				SwingTracker.IgnoreNextFT = false;
+			end
         end
     elseif subEvent == "SWING_DAMAGE" or subEvent == "SWING_MISSED" then
         HandleSwingEvent(timestamp);
