@@ -3,19 +3,19 @@
 # Goal : 
 To provide an extensive priority management on the enhancement shaman.
 
-#What is already there : 
+#What was already there : 
 - simple icon list interface
 - right click to switch between AOE and Single-Target modes
 - variety of options settings
 - good priority management for StormStrike, LavaLash, FireShock, EarthShock, Lightning Shield
 
-#What still needs to be done : 
+#What was added : 
 - Better AOE-Single target Modes with the addition of Chain lightning in the interface - done
     - Adding a switch between modes using Lightning Bold and Chain Lightning to track what mode we're using - done
     - Building different prio when in AOE and in Single target mode - done
 - A predictive management using GCD to anticipate on the next priority for spells priorities that rely on cd and duration - done
 - precisely track both hands swings - done
-- Add Lightning Bolt weaving mechanics -> add Lightning bolts to priority if it fits between auto-attacks
+- Add Lightning Bolt weaving mechanics -> add Lightning bolts to priority if it fits between auto-attacks - done
 
 Priority list : 
 

@@ -118,14 +118,12 @@ local hasOH = false;
 
 -- for SR and FN
 local lowMana = false;
--- for MW==5
-local hasMWfull = false;
 -- for Magma totem
 local noFT = false;
 -- for Stormstrike bonus
 local noSS = false;
 -- for MW>=3
-local hasMW = false;
+local MWstacks = 0;
 
 local SwingTracker = {
     hands = {
@@ -133,9 +131,9 @@ local SwingTracker = {
         OH = { name = "OH", lasttimestamp = nil, nextTimeStamp = nil}
     },
 	IgnoreNextFT = false,
-	IgnoreTimestamp = 0
+	IgnoreTimestamp = 0,
+	offset = nil;
 }
-
 -- for Flame Strike
 local fsLeft = 0;
 -- for Lightning shield
@@ -191,8 +189,8 @@ local Spells = {
 	MS = {id = 51532, name = GetSpellInfo(51532)}, -- Maelstrom Weapon
 	WF = {id = 25505, name = GetSpellInfo(58804)}, -- WindFury enchant
 	FT = {id = 25489, name = GetSpellInfo(58790)}, -- Flametongue Weapon
-	LB = {id = 49238, name = GetSpellInfo(49238)}, -- Lightning Bolt
-	CL = {id = 49271, name = GetSpellInfo(49271)}, -- Chain Lightning
+	LB = {id = 49238, name = GetSpellInfo(49238), castTime = 2.5}, -- Lightning Bolt
+	CL = {id = 49271, name = GetSpellInfo(49271), castTime = 2.0}, -- Chain Lightning
 	FN = {id = 61654, name = GetSpellInfo(61654)}, -- Fire Nova
 	LS = {id = 49281, name = GetSpellInfo(49281)}, -- Lightning Shield
 	SR = {id = 30823, name = GetSpellInfo(30823)}, -- Shamanistic Rage
@@ -211,6 +209,11 @@ local function isGCDReady(spellName, GCDduration)
     return cdLeft - GCDduration - latency <= 0
 end
 
+local function getTrueCastTime(spell)
+	local hasteMod = GetCombatRatingBonus(CR_HASTE_SPELL) / 100
+	local castTime = spell.castTime / (1 + hasteMod);
+	return castTime * ((5 - MWstacks) * 0.2)
+end
 -- here are the different actions (adding stuff to queue according to the situation)
 local ActionsMono = {
 
@@ -234,7 +237,7 @@ local ActionsMono = {
 	end,
 
 	LB = function ()
-    	if hasMWfull and ranged then
+    	if MWstacks >= 5 and ranged then
         	addToQueue(Spells.LB.name);
     	end
 	end,
@@ -253,7 +256,20 @@ local ActionsMono = {
 		end
 	end,
 
-	LBb = function()
+	LBb = function(GCDduration)
+		if MWstacks >= 5 then return end
+   		if not ranged then return end
+    	if not SwingTracker.hands.MH.nextTimeStamp then return end
+    	if not SwingTracker.hands.OH.nextTimeStamp then return end
+		local castTime = getTrueCastTime(Spells.LB)
+		local nextattack = math.min(SwingTracker.hands.MH.nextTimeStamp, SwingTracker.hands.OH.nextTimeStamp) - SwingTracker.offset;
+		local _, _, latencyHome, _ = GetNetStats()
+    	local latency = latencyHome/1000 + safety -- 15ms safety
+		-- swPrint("Next attack : "..nextattack);
+		-- swPrint("castTime : "..castTime.." getTime : "..GetTime().." GCDduration : "..GCDduration.." latency : "..latency.." total : "..castTime + GetTime() + GCDduration + latency)
+		if (castTime + GetTime() + GCDduration + latency < nextattack) then
+			addToQueue(Spells.LB.name);
+		end
 	end,
 
 	FS = function (GCDduration)
@@ -348,13 +364,26 @@ local ActionsAOE = {
 	end,
 
 	CL = function (GCDduration)
-    	if hasMWfull and isGCDReady(Spells.CL.name, GCDduration) and ranged then
+    	if MWstacks >= 5 and isGCDReady(Spells.CL.name, GCDduration) and ranged then
         	addToQueue(Spells.CL.name);
     	end
 	end,
 
 	-- still need to be completed
-	CLb = function ()
+	CLb = function(GCDduration)
+		if MWstacks >= 5 then return end
+   		if not ranged then return end
+    	if not SwingTracker.hands.MH.nextTimeStamp then return end
+    	if not SwingTracker.hands.OH.nextTimeStamp then return end
+		local castTime = getTrueCastTime(Spells.CL)
+		local nextattack = math.min(SwingTracker.hands.MH.nextTimeStamp, SwingTracker.hands.OH.nextTimeStamp) - SwingTracker.offset;
+		local _, _, latencyHome, _ = GetNetStats()
+    	local latency = latencyHome/1000 + safety -- 15ms safety
+		-- swPrint("Next attack : "..nextattack);
+		-- swPrint("castTime : "..castTime.." getTime : "..GetTime().." GCDduration : "..GCDduration.." latency : "..latency.." total : "..castTime + GetTime() + GCDduration + latency)
+		if (castTime + GetTime() + GCDduration + latency < nextattack) then
+			addToQueue(Spells.CL.name);
+		end
 	end,
 
 	SSb = function (GCDduration)
@@ -481,7 +510,7 @@ function getCD(n)
 		duration = 0;
 	end
 	
-	if n == "FN" and not hasMT then
+	if n == "FN" and noFT then
 		duration = 0;
 	end
 	
@@ -527,21 +556,14 @@ function refreshQueue()
 	
 	-- players buffs (maelstrom, lightning shield)
 	noLS = true;
-	hasMWfull = false;
-	hasMW = false;
-	mwAmount = 0;
+	MWstacks = 0;
 	for i=1,40 do
 		local name, _, _, count = UnitBuff("player", i);
 		if not name then
 			break; -- end of buffs
 		end
 		if name == Spells.MS.name then
-		    mwAmount = count;
-			if count == 5 then
-				hasMWfull = true;
-			elseif count >= 3 then
-				hasMW = true;
-			end
+		    MWstacks = count;
 		elseif name == Spells.LS.name then
 			noLS = false;
 		end
@@ -564,7 +586,7 @@ function refreshQueue()
 	
 	-- totems (magma or elemental) -- still need to drop the name as string
 	local _, totemName = GetTotemInfo(1);	
-	if totemName == "Totem de magma VII" or totemName == Spells.FE.name then
+	if totemName == "Totem de magma VII" or totemName == "Totem d'élémentaire de feu" then
 		noFT = false;
 	else
 		noFT = true;
@@ -836,6 +858,7 @@ function EnhaPrio:OnInitialize()
 	mainFrame:EnableMouse(true)
 	mainFrame:SetMovable(true)
 	mainFrame:SetClampedToScreen(true)
+
 	-- add scripts for mouse events on the frame
 	mainFrame:SetScript("OnMouseDown", function(self, button)
 		if not EnhaPrio.db.char.locked and button == "LeftButton" then
@@ -968,8 +991,6 @@ function EnhaPrio:OnEnable()
 		
 		-- move the frames side by side
 		self:RepositionFrames();
-		 
-		swPrint('Enabled');
 	end
 end
 
@@ -1069,13 +1090,13 @@ local function getHand(timestamp)
 	end;
 	if (math.abs(timestamp - SwingTracker.hands.MH.nextTimeStamp) < math.abs(timestamp - SwingTracker.hands.OH.nextTimeStamp)) then
 		if IsTimingInvalid(SwingTracker.hands.MH.nextTimeStamp, timestamp)then
-			swPrint("Invalid timing1".." OH "..SwingTracker.hands.MH.nextTimeStamp.." TS "..timestamp)
+			-- swPrint("Invalid timing1".." OH "..SwingTracker.hands.MH.nextTimeStamp.." TS "..timestamp)
 			ResetSwingTracker();
 		end
 		return "MH";
 	else
 		if IsTimingInvalid(SwingTracker.hands.OH.nextTimeStamp, timestamp)then
-			swPrint("Invalid timing2".." OH "..SwingTracker.hands.OH.nextTimeStamp.." TS "..timestamp)
+			-- swPrint("Invalid timing2".." OH "..SwingTracker.hands.OH.nextTimeStamp.." TS "..timestamp)
 			ResetSwingTracker();
 			return "MH";
 		else
@@ -1090,12 +1111,12 @@ local function HandleSwingEvent(timestamp)
 		SwingTracker.hands.MH.lasttimestamp = timestamp;
 		local mhSpeed, _ = UnitAttackSpeed("player");
 		SwingTracker.hands.MH.nextTimeStamp = timestamp + mhSpeed;
-		swPrint("Setting MH");
+		-- swPrint("Setting MH");
 	else
 		SwingTracker.hands.OH.lasttimestamp = timestamp;
 		local _, ohSpeed_ = UnitAttackSpeed("player");
 		SwingTracker.hands.OH.nextTimeStamp = timestamp + ohSpeed_;
-		swPrint("Setting OH");
+		-- swPrint("Setting OH");
 	end
 end
 
@@ -1124,6 +1145,9 @@ function EnhaPrio:COMBAT_LOG_EVENT_UNFILTERED(...)
           q9,
           q10, 
           spellName = ...
+	if not SwingTracker.offset then
+		SwingTracker.offset = timestamp - GetTime();
+	end
     if sourceGUID ~= UnitGUID("player") then return end
 	if (subEvent == "SPELL_DAMAGE" or subEvent == "SPELL_MISSED") and not SwingTracker.isFireTongued then
         if spellName == Spells.FT_PROC.name then
