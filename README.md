@@ -14,9 +14,9 @@ To provide an extensive priority management on the enhancement shaman.
     - Adding a switch between modes using Lightning Bold and Chain Lightning to track what mode we're using - done
     - Building different prio when in AOE and in Single target mode - done
 - A predictive management using GCD to anticipate on the next priority for spells priorities that rely on cd and duration - done
-- precisely track both hands swings - done
-- Add Lightning Bolt weaving mechanics -> add Lightning bolts to priority if it fits between auto-attacks - done
 
+What's next : 
+- a fire elemental snapshot manager
 Priority list : 
 
 in single target (Real Time)
@@ -60,7 +60,6 @@ in single target (GCDduration) -- GCDduration being the time before the GCD is o
     - MW == 5 -> LB
     - noFireTotem == true -> MT
     - noSS == true & SS'cd - GCDduration <= 0 -> SSb
-    - MW > 3 && NextMeleeHitTimeStamp - currentTimeStamp + GCDduration > LB's casttime + latency + safety -> LBb
     - noFS == true & FS'cd - GCDduration <= 0 -> FS
     - noLS == true -> LS
     - SS'cd - GCDduration <= 0 -> SS

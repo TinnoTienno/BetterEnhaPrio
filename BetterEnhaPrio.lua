@@ -41,7 +41,6 @@ PriorityMono = {
     "LB",      -- MW=5 proc (Lightning Bolt)
     "MT",      -- no fire totem (Magma Totem)
     "SSb",     -- Stormstrike debuff missing (Stormstrike)
-    "LBb",     -- MW>3 && next swing + GCD allows LB (Lightning Bolt)
     "FS",      -- Flame Shock missing (Flame Shock)
     "LS",      -- Lightning Shield missing (Lightning Shield)
     "SS",      -- Stormstrike cd ready (Stormstrike)
@@ -59,7 +58,6 @@ PriorityAOE = {
     "MT",       -- no Fire Totem (Magma Totem)
     "FN",       -- Fire Nova if mana > 20% (Fire Nova)
     "CL",       -- MW=5 proc (Chain lightning)
-    "CLb",      -- MW>3 && timing swing + GCD allows CL (Chain lightning)
     "SSb",      -- Stormstrike debuff missing (Stormstrike)
     "FS",       -- Flame Shock missing (Flame Shock)
     "LS",       -- Lightning Shield missing (Lightning Shield)
@@ -92,10 +90,10 @@ PriorityAOE = {
 
 
 -- initialize the variables (make them globals)
-local EnhaPrio = LibStub( "AceAddon-3.0" ):NewAddon( "EnhaPrio", "AceConsole-3.0", "AceEvent-3.0" );
+local BetterEnhaPrio = LibStub( "AceAddon-3.0" ):NewAddon( "BetterEnhaPrio", "AceConsole-3.0", "AceEvent-3.0" );
 local LBF = LibStub("LibButtonFacade", true);
 if LBF then
-    Group = LBF:Group("EnhaPrio");
+    Group = LBF:Group("BetterEnhaPrio");
 end
 local mainFrame, target, skins;
 local maxQueueSize = 8;
@@ -116,24 +114,15 @@ local hostile = false;
 local hasMH = false;
 local hasOH = false;
 
+-- for Maelstrom weapons
+local MWfull = false;
 -- for SR and FN
 local lowMana = false;
 -- for Magma totem
 local noFT = false;
+local FtLeft = 0;
 -- for Stormstrike bonus
-local noSS = false;
--- for MW>=3
-local MWstacks = 0;
-
-local SwingTracker = {
-    hands = {
-        MH = { name = "MH", lasttimestamp = nil, nextTimeStamp = nil},
-        OH = { name = "OH", lasttimestamp = nil, nextTimeStamp = nil}
-    },
-	IgnoreNextFT = false,
-	IgnoreTimestamp = 0,
-	offset = nil;
-}
+local SsLeft = 0;
 -- for Flame Strike
 local fsLeft = 0;
 -- for Lightning shield
@@ -146,7 +135,7 @@ local mwAmount = 0;
 
 -- button facade
 -- Save the settings to the appropriate section in the saved variables file.
-function EnhaPrio:SkinCallback(SkinID, Gloss, Backdrop, grp, Button, Colors)
+function BetterEnhaPrio:SkinCallback(SkinID, Gloss, Backdrop, grp, Button, Colors)
         self.db.char.bf.SkinID = SkinID
         self.db.char.bf.Gloss = Gloss
         self.db.char.bf.Backdrop = Backdrop
@@ -209,11 +198,6 @@ local function isGCDReady(spellName, GCDduration)
     return cdLeft - GCDduration - latency <= 0
 end
 
-local function getTrueCastTime(spell)
-	local hasteMod = GetCombatRatingBonus(CR_HASTE_SPELL) / 100
-	local castTime = spell.castTime / (1 + hasteMod);
-	return castTime * ((5 - MWstacks) * 0.2)
-end
 -- here are the different actions (adding stuff to queue according to the situation)
 local ActionsMono = {
 
@@ -231,13 +215,13 @@ local ActionsMono = {
 
 	SR = function (GCDduration)
 		-- do shamanistic rage
-		if isGCDReady(Spells.SR.name, GCDduration) and lowMana and melee then
+		if lowMana and melee and isGCDReady(Spells.SR.name, GCDduration) then
 			addToQueue(Spells.SR.name);
 		end
 	end,
 
 	LB = function ()
-    	if MWstacks >= 5 and ranged then
+    	if MWfull and ranged then
         	addToQueue(Spells.LB.name);
     	end
 	end,
@@ -251,30 +235,14 @@ local ActionsMono = {
 
 	SSb = function (GCDduration)
 		-- if the target doesn't have your ss buff on, do it
-		if noSS and isGCDReady(Spells.SS.name, GCDduration) and melee then
+		if SsLeft < GCDduration and melee and isGCDReady(Spells.SS.name, GCDduration) then
 			addToQueue(Spells.SS.name);
-		end
-	end,
-
-	LBb = function(GCDduration)
-		if MWstacks >= 5 then return end
-   		if not ranged then return end
-    	if not SwingTracker.hands.MH.nextTimeStamp then return end
-    	if not SwingTracker.hands.OH.nextTimeStamp then return end
-		local castTime = getTrueCastTime(Spells.LB)
-		local nextattack = math.min(SwingTracker.hands.MH.nextTimeStamp, SwingTracker.hands.OH.nextTimeStamp) - SwingTracker.offset;
-		local _, _, latencyHome, _ = GetNetStats()
-    	local latency = latencyHome/1000 + safety -- 15ms safety
-		-- swPrint("Next attack : "..nextattack);
-		-- swPrint("castTime : "..castTime.." getTime : "..GetTime().." GCDduration : "..GCDduration.." latency : "..latency.." total : "..castTime + GetTime() + GCDduration + latency)
-		if (castTime + GetTime() + GCDduration + latency < nextattack) then
-			addToQueue(Spells.LB.name);
 		end
 	end,
 
 	FS = function (GCDduration)
 		-- if there is under 1.5sec left on flame shock on the target
-		if isGCDReady(Spells.FS.name, GCDduration) and ranged and fsLeft <= 3 then
+		if ranged and fsLeft < GCDduration and isGCDReady(Spells.FS.name, GCDduration) then
 			addToQueue(Spells.FS.name);
 		end
 	end,
@@ -288,37 +256,35 @@ local ActionsMono = {
 	
 	SS = function (GCDduration) 
 		-- Stormstrike
-		if isGCDReady(Spells.SS.name, GCDduration) and melee then
+		if melee and isGCDReady(Spells.SS.name, GCDduration) then
 			addToQueue(Spells.SS.name);
 		end
 	end,
 
 	ES = function (GCDduration)
 		-- earth shock
-		if isGCDReady(Spells.ES.name, GCDduration) and ranged and fsLeft > 6 then
+		if ranged and fsLeft > 6 - GCDduration and isGCDReady(Spells.ES.name, GCDduration) then
 			addToQueue(Spells.ES.name);
 		end
 	end,
 	
 	FN = function (GCDduration)
 		-- fire nova
-		if isGCDReady(Spells.FN.name, GCDduration) and not noFT then
+		if not noFT and FtLeft > GCDduration and isGCDReady(Spells.FN.name, GCDduration)  then
 			addToQueue(Spells.FN.name);
 		end
 	end,
 
 	LL = function (GCDduration)
 		-- lava lash
-		if isGCDReady(Spells.LL.name, GCDduration) and melee then
+		if melee and isGCDReady(Spells.LL.name, GCDduration) then
 			addToQueue(Spells.LL.name);
 		end
 	end,
 
 	MTb = function (GCDduration)
 		-- Magma totem
-		local _, _, start, duration = GetTotemInfo(1);
-		local MTduration = start + duration - GetTime();
-		if (MTduration - GCDduration < 3) then
+		if FtLeft < GCDduration + 3 then
 			addToQueue(Spells.MT.name);
 		end
 	end,
@@ -344,7 +310,7 @@ local ActionsAOE = {
 
 	SR = function (GCDduration)
 		-- do shamanistic rage
-		if isGCDReady(Spells.SR.name, GCDduration) and lowMana and melee then
+		if lowMana and melee and isGCDReady(Spells.SR.name, GCDduration) then
 			addToQueue(Spells.SR.name);
 		end
 	end,
@@ -358,44 +324,27 @@ local ActionsAOE = {
 
 	FN = function (GCDduration)
 		-- fire nova
-		if isGCDReady(Spells.FN.name, GCDduration) and not lowMana and not noFT then
+		if not lowMana and noFT and FtLeft >= GCDduration and isGCDReady(Spells.FN.name, GCDduration) then
 			addToQueue(Spells.FN.name);
 		end
 	end,
 
 	CL = function (GCDduration)
-    	if MWstacks >= 5 and isGCDReady(Spells.CL.name, GCDduration) and ranged then
+    	if MWfull and isGCDReady(Spells.CL.name, GCDduration) and ranged then
         	addToQueue(Spells.CL.name);
     	end
 	end,
 
-	-- still need to be completed
-	CLb = function(GCDduration)
-		if MWstacks >= 5 then return end
-   		if not ranged then return end
-    	if not SwingTracker.hands.MH.nextTimeStamp then return end
-    	if not SwingTracker.hands.OH.nextTimeStamp then return end
-		local castTime = getTrueCastTime(Spells.CL)
-		local nextattack = math.min(SwingTracker.hands.MH.nextTimeStamp, SwingTracker.hands.OH.nextTimeStamp) - SwingTracker.offset;
-		local _, _, latencyHome, _ = GetNetStats()
-    	local latency = latencyHome/1000 + safety -- 15ms safety
-		-- swPrint("Next attack : "..nextattack);
-		-- swPrint("castTime : "..castTime.." getTime : "..GetTime().." GCDduration : "..GCDduration.." latency : "..latency.." total : "..castTime + GetTime() + GCDduration + latency)
-		if (castTime + GetTime() + GCDduration + latency < nextattack) then
-			addToQueue(Spells.CL.name);
-		end
-	end,
-
 	SSb = function (GCDduration)
 		-- if the target doesn't have your ss buff on, do it
-		if noSS and isGCDReady(Spells.SS.name, GCDduration) and melee then
+		if SsLeft < GCDduration and melee and isGCDReady(Spells.SS.name, GCDduration) then
 			addToQueue(Spells.SS.name);
 		end
 	end,
 
 	FS = function (GCDduration)
 		-- if there is under 1.5sec left on flame shock on the target
-		if isGCDReady(Spells.FS.name, GCDduration) and ranged and fsLeft <= 3 then
+		if ranged and fsLeft <= GCDduration and isGCDReady(Spells.FS.name, GCDduration) then
 			addToQueue(Spells.FS.name);
 		end
 	end,
@@ -409,30 +358,28 @@ local ActionsAOE = {
 	
 	SS = function (GCDduration) 
 		-- Stormstrike
-		if isGCDReady(Spells.SS.name, GCDduration) and melee then
+		if melee and isGCDReady(Spells.SS.name, GCDduration) then
 			addToQueue(Spells.SS.name);
 		end
 	end,
 
 	ES = function (GCDduration)
 		-- earth shock
-		if isGCDReady(Spells.ES.name, GCDduration) and ranged and fsLeft > 6 then
+		if ranged and fsLeft > 6 - GCDduration and isGCDReady(Spells.ES.name, GCDduration) then
 			addToQueue(Spells.ES.name);
 		end
 	end,
 
 	MTb = function (GCDduration)
-		-- Magma totem
-		local _, _, start, duration = GetTotemInfo(1);
-		local MTduration = start + duration - GetTime();
-		if (MTduration - GCDduration < 3) then
+		-- Maintaining magma totem
+		if FtLeft <= GCDduration + 3 then
 			addToQueue(Spells.MT.name);
 		end
 	end,
 
 	LL = function (GCDduration)
 		-- lava lash
-		if isGCDReady(Spells.LL.name, GCDduration) and melee then
+		if melee and isGCDReady(Spells.LL.name, GCDduration) then
 			addToQueue(Spells.LL.name);
 		end
 	end,
@@ -452,7 +399,7 @@ local function makeCDQueue()
 	local cdq = {};
 	for i, n in pairs(Cooldowns) do
 		if getCD(n) > 0 then
-		    if (n ~= "MT" and n ~= "FN") or ((n == "MT" or n == "FN") and EnhaPrio.db.char.enableAOE) then
+		    if (n ~= "MT" and n ~= "FN") or ((n == "MT" or n == "FN") and BetterEnhaPrio.db.char.enableAOE) then
 				table.insert(cdq, n);
 			end
 		end
@@ -468,7 +415,7 @@ local function makeCDQueue()
 		
 			if a == "SS" and ssDebuff then a = "SSb" end
 			if b == "SS" and ssDebuff then b = "SSb" end
-			local Priority = EnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
+			local Priority = BetterEnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
 			
 		  	for i, v in ipairs(Priority) do
 		  		if v == a then av = i end
@@ -556,21 +503,22 @@ function refreshQueue()
 	
 	-- players buffs (maelstrom, lightning shield)
 	noLS = true;
-	MWstacks = 0;
+	MWfull = false;
+	FtLeft = 0;
 	for i=1,40 do
 		local name, _, _, count = UnitBuff("player", i);
 		if not name then
 			break; -- end of buffs
 		end
-		if name == Spells.MS.name then
-		    MWstacks = count;
+		if name == Spells.MS.name and count == 5 then
+		    MWfull = true;
 		elseif name == Spells.LS.name then
 			noLS = false;
 		end
 	end
 	
 	-- targets debuffs (fire shock)
-	noSS = true;
+	SsLeft = 0;
 	fsLeft = 0;
 	for i=1,40 do
 		local name, _, _, _, _, _, expirationTime, caster = UnitDebuff("target", i);
@@ -580,7 +528,7 @@ function refreshQueue()
 		if caster == "player" and name == Spells.FS.name then
 			fsLeft = expirationTime - GetTime();
 		elseif caster == "player" and name == Spells.SS.name then
-			noSS = false;
+			SsLeft = expirationTime - GetTime();
 		end
 	end
 	
@@ -588,6 +536,7 @@ function refreshQueue()
 	local _, totemName = GetTotemInfo(1);	
 	if totemName == "Totem de magma VII" or totemName == "Totem d'élémentaire de feu" then
 		noFT = false;
+		FtLeft = GetTotemTimeLeft(1);
 	else
 		noFT = true;
 	end
@@ -598,7 +547,7 @@ function refreshQueue()
 	-- mana situation
 	local mana = UnitPower('player');
   	local maxMana = UnitPowerMax('player');
-  	if mana < ((EnhaPrio.db.char.manaThreshold / 100) * maxMana) then
+  	if mana < ((BetterEnhaPrio.db.char.manaThreshold / 100) * maxMana) then
   		lowMana = true;
   	else
   		lowMana = false;
@@ -610,14 +559,14 @@ function refreshQueue()
 
 	local GCDduration = getGCDduration()
   	-- now loop through the actions
-	local Actions = EnhaPrio.db.char.enableAOE and ActionsAOE or ActionsMono
-	local Priority = EnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
+	local Actions = BetterEnhaPrio.db.char.enableAOE and ActionsAOE or ActionsMono
+	local Priority = BetterEnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
 	for i, v in ipairs(Priority) do
 		Actions[v](GCDduration);
 	end
 end
 
-function EnhaPrio:reCalculate()
+function BetterEnhaPrio:reCalculate()
 	-- check if the target is hostile and you are not mounted or on a vehicle or dead
 	queue = {};
 	hostile = UnitName("target") and UnitCanAttack("player","target") and UnitHealth("target") > 0;
@@ -743,7 +692,7 @@ function check(f, spell)
 end
 
 -- functions to take care of the addon (visuals and saving etc)
-function EnhaPrio:SaveLocation()
+function BetterEnhaPrio:SaveLocation()
 	point, relativeTo, relativePoint, xOfs, yOfs = mainFrame:GetPoint();
 	self.db.char.x = xOfs;
 	self.db.char.y = yOfs;
@@ -751,12 +700,12 @@ function EnhaPrio:SaveLocation()
 end
 
 -- change the aoe setting
-function EnhaPrio:ChangeAOE()
+function BetterEnhaPrio:ChangeAOE()
 	self.db.char.enableAOE = not self.db.char.enableAOE;
 	self:UpdateAOEText();
 end
 
-function EnhaPrio:RepositionFrames(queue)
+function BetterEnhaPrio:RepositionFrames(queue)
     local maxQueueSize = self.db.char.maxQueue;
     local spacing = self.db.char.spacing;
 
@@ -835,19 +784,19 @@ end
 
 -- print something to window
 function swPrint(s)
-    DEFAULT_CHAT_FRAME:AddMessage("EnhaPrio: ".. tostring(s));
+    DEFAULT_CHAT_FRAME:AddMessage("BetterEnhaPrio: ".. tostring(s));
 end
 
 
 --- on initialize
-function EnhaPrio:OnInitialize()
+function BetterEnhaPrio:OnInitialize()
 	local AceConfigReg = LibStub("AceConfigRegistry-3.0")
 	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 	
 	-- register shit
-	self.db = LibStub("AceDB-3.0"):New("EnhaPrioDB", defaults, "char")
-	LibStub("AceConfig-3.0"):RegisterOptionsTable("EnhaPrio", self:GetOptions(), {"EnhaPrio", "fin"} )
-	self.optionsFrame = AceConfigDialog:AddToBlizOptions("EnhaPrio","EnhaPrio")
+	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
+	LibStub("AceConfig-3.0"):RegisterOptionsTable("BetterEnhaPrio", self:GetOptions(), {"BetterEnhaPrio", "fin"} )
+	self.optionsFrame = AceConfigDialog:AddToBlizOptions("BetterEnhaPrio","BetterEnhaPrio")
 	self.db:RegisterDefaults(defaults);
 
 	-- create the main frame and configure it
@@ -861,19 +810,19 @@ function EnhaPrio:OnInitialize()
 
 	-- add scripts for mouse events on the frame
 	mainFrame:SetScript("OnMouseDown", function(self, button)
-		if not EnhaPrio.db.char.locked and button == "LeftButton" then
+		if not BetterEnhaPrio.db.char.locked and button == "LeftButton" then
 			self:StartMoving();
 		elseif button == "RightButton" then
-			EnhaPrio:ChangeAOE();
+			BetterEnhaPrio:ChangeAOE();
 		end
 	end);
 	mainFrame:SetScript("OnMouseUp", function(self) 
 		self:StopMovingOrSizing(); 
-		EnhaPrio:SaveLocation(); 
+		BetterEnhaPrio:SaveLocation(); 
 	end);
 	mainFrame:SetScript("OnDragStop", function(self) 
 		self:StopMovingOrSizing(); 
-		EnhaPrio:SaveLocation(); 
+		BetterEnhaPrio:SaveLocation(); 
 	end);
 	mainFrame:ClearAllPoints();
 	mainFrame:SetPoint(self.db.char.relativePoint, self.db.char.x, self.db.char.y);
@@ -884,7 +833,7 @@ function EnhaPrio:OnInitialize()
 	spellQueueFrames = {};
 	for i=maxQueueSize,1,-1 do
 		local parentFrame = mainFrame;
-		local f = CreateFrame("Button","EnhaPrioButton" .. i, parentFrame)
+		local f = CreateFrame("Button","BetterEnhaPrioButton" .. i, parentFrame)
 		f:SetFrameStrata("BACKGROUND")
 		f:SetWidth(self.db.char.size)
 		f:SetHeight(self.db.char.size)
@@ -908,7 +857,7 @@ function EnhaPrio:OnInitialize()
 	end
 	
 	-- frames for wolf and elemental
-	mainFrame.wolf = CreateFrame("Button", "EnhaPrioFeralSpiritButton", mainFrame);
+	mainFrame.wolf = CreateFrame("Button", "BetterEnhaPrioFeralSpiritButton", mainFrame);
 	mainFrame.wolf.id = 51533;
 	mainFrame.wolf.texture = mainFrame.wolf:CreateTexture(nil,"BACKGROUND");
 	mainFrame.wolf.texture:SetAllPoints(mainFrame.wolf);
@@ -920,7 +869,7 @@ function EnhaPrio:OnInitialize()
 	mainFrame.wolf:SetClampedToScreen(true);
 	mainFrame.wolf:ClearAllPoints();
 	
-	mainFrame.elemental = CreateFrame("Button", "EnhaPrioFireElementalButton", mainFrame);
+	mainFrame.elemental = CreateFrame("Button", "BetterEnhaPrioFireElementalButton", mainFrame);
 	mainFrame.elemental.id = 2894;
 	mainFrame.elemental.texture = mainFrame.elemental:CreateTexture(nil,"BACKGROUND");
 	mainFrame.elemental.texture:SetAllPoints(mainFrame.elemental);
@@ -952,7 +901,7 @@ function EnhaPrio:OnInitialize()
 	mainFrame.AOEtext:SetTextColor(1, 0, 0, 1);
 end
 
-function EnhaPrio:OnEnable()
+function BetterEnhaPrio:OnEnable()
 	local playerClass, englishClass = UnitClass("player");
 	if UnitLevel('player') < 80 then
 	    swPrint('Only lvl80 characters are supported.');
@@ -972,22 +921,21 @@ function EnhaPrio:OnEnable()
 		self:RegisterEvent("PLAYER_TARGET_CHANGED");
 		self:RegisterEvent("SPELL_UPDATE_COOLDOWN");
 		self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
-		self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
 		self:UpdateAOEText();
 		mainFrame:SetScript('OnUpdate', function(self, timeSinceLast)
 			timeLeft = timeLeft - timeSinceLast;
 			if timeLeft <= 0 then
-				EnhaPrio:reCalculate();
+				BetterEnhaPrio:reCalculate();
 			end
 		end);
 		
         if LBF then
-        LBF:RegisterSkinCallback("EnhaPrio", self.SkinCallback, self);
+        LBF:RegisterSkinCallback("BetterEnhaPrio", self.SkinCallback, self);
         end
 
 		-- Register chat commands.
 		self:RegisterChatCommand("ep", function() self:OpenOptions() end);
-		self:RegisterChatCommand("enhaprio", function() self:OpenOptions() end);
+		self:RegisterChatCommand("Betterenhaprio", function() self:OpenOptions() end);
 		
 		-- move the frames side by side
 		self:RepositionFrames();
@@ -995,22 +943,22 @@ function EnhaPrio:OnEnable()
 end
 
 -- :OpenOptions(): Opens the options window.
-function EnhaPrio:OpenOptions()
+function BetterEnhaPrio:OpenOptions()
 	InterfaceOptionsFrame_OpenToCategory(self.optionsFrame);
 end
 
-function EnhaPrio:OnDisable()
+function BetterEnhaPrio:OnDisable()
 	mainFrame:SetScript('OnUpdate', nil);
 	swPrint('Disabled');
 end
 
-function EnhaPrio:GetProperty(info)
+function BetterEnhaPrio:GetProperty(info)
 	local propName = info[#info];
 	local value = self.db.char[propName];
 	return value;
 end
 
-function EnhaPrio:SetProperty(info, newValue)
+function BetterEnhaPrio:SetProperty(info, newValue)
 	local propName = info[#info];
 	self.db.char[propName] = newValue;
 	if propName == 'spacing' or propName == 'size' or propName == 'queueDirection' or propName == 'displayMW' then
@@ -1024,26 +972,17 @@ function EnhaPrio:SetProperty(info, newValue)
 	end 
 end
 
-function EnhaPrio:UpdateAOEText()
+function BetterEnhaPrio:UpdateAOEText()
     mainFrame.AOEtext:SetText(self.db.char.enableAOE and "AOE" or "")
 end
 
-local function ResetSwingTracker()
-    SwingTracker.hands.MH.lasttimestamp = nil
-    SwingTracker.hands.MH.nexttimestamp = nil
-    SwingTracker.hands.MH.name = nil    
-	SwingTracker.hands.OH.lasttimestamp = nil
-	SwingTracker.hands.OH.nexttimestamp = nil
-    SwingTracker.hands.OH.name = nil
-	swPrint("SwingTracker reset");
-end
 
-function EnhaPrio:PLAYER_TARGET_CHANGED(...) 
+function BetterEnhaPrio:PLAYER_TARGET_CHANGED(...) 
   hostile = UnitName("target") and UnitCanAttack("player","target") and UnitHealth("target") > 0;
   timeLeft = 0;
 end
 
-function EnhaPrio:SPELL_UPDATE_COOLDOWN(...)
+function BetterEnhaPrio:SPELL_UPDATE_COOLDOWN(...)
 	if queue[1] then
 	 	local GCDstart, GCD = GetSpellCooldown(Spells.LB.name);
 	 	local start, duration = GetSpellCooldown(queue[1]);
@@ -1057,118 +996,22 @@ function EnhaPrio:SPELL_UPDATE_COOLDOWN(...)
 	end
 end
 
-function EnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
+function BetterEnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
     if unitID ~= "player" then 
 		return 
 	end
     if spell == Spells.CL.name then
         self.db.char.enableAOE = true
-    elseif spell == Spells.LB.name then
+    elseif spell == Spells.LB.name and not CLoncd then
         self.db.char.enableAOE = false
-	elseif spell == Spells.SS.name then
-		SwingTracker.IgnoreNextFT = true;
-		SwingTracker.IgnoreTimestamp = GetTime();
-	elseif spell == Spells.LL.name then
-		SwingTracker.IgnoreNextFT = true;
-		SwingTracker.IgnoreTimestamp = GetTime();
 	end
 	self:UpdateAOEText()
 end
 
-local function IsTimingInvalid(expected, actual)
-    if not expected then return false end
-
-    local delta = math.abs(actual - expected)
-    return delta > 0.4
-end
-
-local function getHand(timestamp)
-	if (not SwingTracker.hands.MH.lasttimestamp) then
-		return "MH";
-	elseif (not SwingTracker.hands.OH.lasttimestamp) then 
-		return "OH";
-	end;
-	if (math.abs(timestamp - SwingTracker.hands.MH.nextTimeStamp) < math.abs(timestamp - SwingTracker.hands.OH.nextTimeStamp)) then
-		if IsTimingInvalid(SwingTracker.hands.MH.nextTimeStamp, timestamp)then
-			-- swPrint("Invalid timing1".." OH "..SwingTracker.hands.MH.nextTimeStamp.." TS "..timestamp)
-			ResetSwingTracker();
-		end
-		return "MH";
-	else
-		if IsTimingInvalid(SwingTracker.hands.OH.nextTimeStamp, timestamp)then
-			-- swPrint("Invalid timing2".." OH "..SwingTracker.hands.OH.nextTimeStamp.." TS "..timestamp)
-			ResetSwingTracker();
-			return "MH";
-		else
-			return "OH";
-		end
-	end
-end
-
-local function HandleSwingEvent(timestamp)
-	local hand = getHand(timestamp);
-	if (hand == "MH") then
-		SwingTracker.hands.MH.lasttimestamp = timestamp;
-		local mhSpeed, _ = UnitAttackSpeed("player");
-		SwingTracker.hands.MH.nextTimeStamp = timestamp + mhSpeed;
-		-- swPrint("Setting MH");
-	else
-		SwingTracker.hands.OH.lasttimestamp = timestamp;
-		local _, ohSpeed_ = UnitAttackSpeed("player");
-		SwingTracker.hands.OH.nextTimeStamp = timestamp + ohSpeed_;
-		-- swPrint("Setting OH");
-	end
-end
-
-local function GetLastSwingHand()
-    if not SwingTracker.hands.OH.lasttimestamp then
-        return nil
-    end
-    local ts1 = SwingTracker.hands.MH.lasttimestamp or 0
-    local ts2 = SwingTracker.hands.OH.lasttimestamp
-    if ts2 > ts1 then
-        return "OH"
-    else
-        return "MH"
-    end
-end
-
-function EnhaPrio:COMBAT_LOG_EVENT_UNFILTERED(...)
-    local q1,
-          timestamp,
-          subEvent,
-          sourceGUID,
-          sourceName,
-          q6,
-          q7,
-          q8,
-          q9,
-          q10, 
-          spellName = ...
-	if not SwingTracker.offset then
-		SwingTracker.offset = timestamp - GetTime();
-	end
-    if sourceGUID ~= UnitGUID("player") then return end
-	if (subEvent == "SPELL_DAMAGE" or subEvent == "SPELL_MISSED") and not SwingTracker.isFireTongued then
-        if spellName == Spells.FT_PROC.name then
-			if not (SwingTracker.IgnoreNextFT or timestamp - SwingTracker.IgnoreTimestamp > 0.2) then
-				if GetLastSwingHand() ~= "OH" then
-					swPrint("Wrong firetongue")
-					ResetSwingTracker()
-				end
-			else
-				SwingTracker.IgnoreNextFT = false;
-			end
-        end
-    elseif subEvent == "SWING_DAMAGE" or subEvent == "SWING_MISSED" then
-        HandleSwingEvent(timestamp);
-    end
-end
-
-function EnhaPrio:GetOptions()
+function BetterEnhaPrio:GetOptions()
 	local options = { 
-		name = "EnhaPrio",
-		handler = EnhaPrio,
+		name = "BetterEnhaPrio",
+		handler = BetterEnhaPrio,
 		type = 'group',
 		childGroups ='tree',
 		args = {
