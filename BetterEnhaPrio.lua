@@ -21,7 +21,6 @@
     SR - Shamanistic Rage
     FN - Fire Nova
     FE - Fire Elemental Totem
-    SR - Shamanistic Rage
 	WV - Feral Spirits (Wolves)
 
     This addon doesn't take long cooldown abilities like Feral Spirit or
@@ -67,24 +66,6 @@ PriorityAOE = {
     "LL",       -- Lava Lash
     "LSb"  -- fallback Lightning Shield (Lightning Shield)
 }
-
--- Priority = {
--- 	"WF", -- weapon buffs (windfury)
--- 	"FT", -- weapon buffs (flametongue)
-	
--- 	"SR", -- Shamanistic Rage when you have less than 20% mana
-	
--- 	"LB", -- Lightning Bolt if there are 5 Maelstrom stacks
--- 	"FS", -- Flame Shock if there's less than 1.5 sec left on the dot
--- 	"SSb", -- Stormstrike if there's no ss buff on the target
--- 	"LS", -- Lightning Shield if it isn't active on you
--- 	"MT", -- Magma Totem if you don't have one down
--- 	"ES", -- Earth Shock
--- 	"SS", -- Stormstrike even if there's a ss buff on the target
--- 	"LL", -- Lava Lash
--- 	"FN"  -- Fire Nova
--- }
-
 
 --[[ Ok, don't mess with anything below this (unless you know what you're doing ofc) ]]--
 
@@ -231,7 +212,7 @@ local ActionsMono = {
 		if noFT then
 			addToQueue(Spells.MT.name);
 		end
-	end, 
+	end,
 
 	SSb = function (GCDduration)
 		-- if the target doesn't have your ss buff on, do it
@@ -570,7 +551,6 @@ function BetterEnhaPrio:reCalculate()
 	-- check if the target is hostile and you are not mounted or on a vehicle or dead
 	queue = {};
 	hostile = UnitName("target") and UnitCanAttack("player","target") and UnitHealth("target") > 0;
-	mounted = false; --- make it work!!!
 	dead = UnitHealth("target") < 1;
 	yourdead = UnitHealth("player") < 1;
 	local maxQueueSize = self.db.char.maxQueue;
@@ -794,7 +774,7 @@ function BetterEnhaPrio:OnInitialize()
 	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 	
 	-- register shit
-	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
+	self.db = Lidatabase and configb("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
 	LibStub("AceConfig-3.0"):RegisterOptionsTable("BetterEnhaPrio", self:GetOptions(), {"BetterEnhaPrio", "fin"} )
 	self.optionsFrame = AceConfigDialog:AddToBlizOptions("BetterEnhaPrio","BetterEnhaPrio")
 	self.db:RegisterDefaults(defaults);
@@ -816,13 +796,13 @@ function BetterEnhaPrio:OnInitialize()
 			BetterEnhaPrio:ChangeAOE();
 		end
 	end);
-	mainFrame:SetScript("OnMouseUp", function(self) 
-		self:StopMovingOrSizing(); 
-		BetterEnhaPrio:SaveLocation(); 
+	mainFrame:SetScript("OnMouseUp", function(self)
+		self:StopMovingOrSizing();
+		BetterEnhaPrio:SaveLocation();
 	end);
-	mainFrame:SetScript("OnDragStop", function(self) 
-		self:StopMovingOrSizing(); 
-		BetterEnhaPrio:SaveLocation(); 
+	mainFrame:SetScript("OnDragStop", function(self)
+		self:StopMovingOrSizing();
+		BetterEnhaPrio:SaveLocation();
 	end);
 	mainFrame:ClearAllPoints();
 	mainFrame:SetPoint(self.db.char.relativePoint, self.db.char.x, self.db.char.y);
@@ -881,11 +861,10 @@ function BetterEnhaPrio:OnInitialize()
 	mainFrame.elemental:SetClampedToScreen(true);
 	mainFrame.elemental:ClearAllPoints();
 	
-	if LBF then 
+	if LBF then
 		Group:AddButton(mainFrame.wolf, {Icon = mainFrame.wolf.texture});
-		Group:AddButton(mainFrame.elemental, {Icon = mainFrame.elemental.texture}); 
+		Group:AddButton(mainFrame.elemental, {Icon = mainFrame.elemental.texture});
 	end
-	
 	
 	-- text for maelstrom
 	mainFrame.text = mainFrame:CreateFontString(nil,"OVERLAY")
@@ -912,13 +891,10 @@ function BetterEnhaPrio:OnEnable()
 	else
 		playerId = UnitGUID("player");
 		
-		self:PLAYER_TARGET_CHANGED(); -- check target self:RecalcMode();
-		
-		-- Register for Function Events
-		-- self:UnregisterAllEvents();
-		swPrint("Mode ");
 
-		self:RegisterEvent("PLAYER_TARGET_CHANGED");
+		self:PLAYER_TARGET_CHANGED();
+
+		-- Register for Function Events		self:RegisterEvent("PLAYER_TARGET_CHANGED");
 		self:RegisterEvent("SPELL_UPDATE_COOLDOWN");
 		self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
 		self:UpdateAOEText();
@@ -1000,12 +976,12 @@ function BetterEnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
     if unitID ~= "player" then 
 		return 
 	end
+    if spell == Spells.CL.name
+		return
+	end
     if spell == Spells.CL.name then
         self.db.char.enableAOE = true
-    elseif spell == Spells.LB.name and not CLoncd then
-        self.db.char.enableAOE = false
-	end
-	self:UpdateAOEText()
+    elseif spell == Spells.LB.name
 end
 
 function BetterEnhaPrio:GetOptions()
