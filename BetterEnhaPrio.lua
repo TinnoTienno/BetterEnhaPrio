@@ -773,8 +773,8 @@ function BetterEnhaPrio:OnInitialize()
 	local AceConfigReg = LibStub("AceConfigRegistry-3.0")
 	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 	
-	-- register shit
-	self.db = Lidatabase and configb("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
+	-- register database and config
+	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
 	LibStub("AceConfig-3.0"):RegisterOptionsTable("BetterEnhaPrio", self:GetOptions(), {"BetterEnhaPrio", "fin"} )
 	self.optionsFrame = AceConfigDialog:AddToBlizOptions("BetterEnhaPrio","BetterEnhaPrio")
 	self.db:RegisterDefaults(defaults);
@@ -890,11 +890,11 @@ function BetterEnhaPrio:OnEnable()
 		mainFrame:Hide();
 	else
 		playerId = UnitGUID("player");
-		
 
 		self:PLAYER_TARGET_CHANGED();
 
-		-- Register for Function Events		self:RegisterEvent("PLAYER_TARGET_CHANGED");
+		-- Register for Function Events
+		self:RegisterEvent("PLAYER_TARGET_CHANGED");
 		self:RegisterEvent("SPELL_UPDATE_COOLDOWN");
 		self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
 		self:UpdateAOEText();
@@ -973,15 +973,18 @@ function BetterEnhaPrio:SPELL_UPDATE_COOLDOWN(...)
 end
 
 function BetterEnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
-    if unitID ~= "player" then 
-		return 
-	end
-    if spell == Spells.CL.name
+    if unitID ~= "player" then
 		return
 	end
     if spell == Spells.CL.name then
         self.db.char.enableAOE = true
-    elseif spell == Spells.LB.name
+    elseif spell == Spells.LB.name then
+		local GCDstart, GCD = GetSpellCooldown(Spells.LB.name);
+		local CDstart, CD = GetSpellCooldown(Spells.CL.name);
+		if (CD <= GCD) -- Doesn't update mode if Chain Lighting is in CD considering it might be a false positive
+        	self.db.char.enableAOE = false
+	end
+	self:UpdateAOEText()
 end
 
 function BetterEnhaPrio:GetOptions()
