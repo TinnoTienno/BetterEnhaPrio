@@ -33,57 +33,57 @@
 This is the priority. You can change the order of these, if you think it necessary
 or comment out with "--" if not wanted. ]]
 
-PriorityMono = {
+local PriorityMono = {
 	"WF",      -- weapon buffs (windfury)
-    "FT",      -- weapon buffs (flametongue)
-    "SR",      -- low mana, cd check with GCD (Shamanistic Rage)
-    "LB",      -- MW=5 proc (Lightning Bolt)
-    "MT",      -- no fire totem (Magma Totem)
-    "SSb",     -- Stormstrike debuff missing (Stormstrike)
-    "FS",      -- Flame Shock missing (Flame Shock)
-    "LS",      -- Lightning Shield missing (Lightning Shield)
-    "SS",      -- Stormstrike cd ready (Stormstrike)
-    "ES",      -- Earth Shock if FS>6 sec (Earth Shock)
-    "FN",      -- Fire Nova if mana > 20% (Fire Nova)
-    "LL",      -- Lava Lash
-    "MTb",     -- Fire Totem duration < 3 sec (Magma Totem)
-    "LSb"		-- fallback (Lightning Shield)
+	"FT",      -- weapon buffs (flametongue)
+	"SR",      -- low mana, cd check with GCD (Shamanistic Rage)
+	"LB",      -- MW=5 proc (Lightning Bolt)
+	"MT",      -- no fire totem (Magma Totem)
+	"SSb",     -- Stormstrike debuff missing (Stormstrike)
+	"FS",      -- Flame Shock missing (Flame Shock)
+	"LS",      -- Lightning Shield missing (Lightning Shield)
+	"SS",      -- Stormstrike cd ready (Stormstrike)
+	"ES",      -- Earth Shock if FS>6 sec (Earth Shock)
+	"FN",      -- Fire Nova if mana > 20% (Fire Nova)
+	"LL",      -- Lava Lash
+	"MTb",     -- Fire Totem duration < 3 sec (Magma Totem)
+	"LSb"      -- fallback (Lightning Shield)
 }
 
-PriorityAOE = {
+local PriorityAOE = {
 	"WF",       -- weapon buffs (windfury)
-    "FT",       -- weapon buffs (flametongue)
-    "SR",       -- low mana, cd check with GCD (Shamanistic Rage)
-    "MT",       -- no Fire Totem (Magma Totem)
-    "FN",       -- Fire Nova if mana > 20% (Fire Nova)
-    "CL",       -- MW=5 proc (Chain lightning)
-    "SSb",      -- Stormstrike debuff missing (Stormstrike)
-    "FS",       -- Flame Shock missing (Flame Shock)
-    "LS",       -- Lightning Shield missing (Lightning Shield)
-    "SS",       -- Stormstrike cd ready (Stormstrike)
-    "ES",       -- Earth Shock if FS>6 sec (Earth Shock)
-    "MTb",      -- Fire Totem duration < 3 sec (Magma Totem)
-    "LL",       -- Lava Lash
-    "LSb"  -- fallback Lightning Shield (Lightning Shield)
+	"FT",       -- weapon buffs (flametongue)
+	"SR",       -- low mana, cd check with GCD (Shamanistic Rage)
+	"MT",       -- no Fire Totem (Magma Totem)
+	"FN",       -- Fire Nova if mana > 20% (Fire Nova)
+	"CL",       -- MW=5 proc (Chain lightning)
+	"SSb",      -- Stormstrike debuff missing (Stormstrike)
+	"FS",       -- Flame Shock missing (Flame Shock)
+	"LS",       -- Lightning Shield missing (Lightning Shield)
+	"SS",       -- Stormstrike cd ready (Stormstrike)
+	"ES",       -- Earth Shock if FS>6 sec (Earth Shock)
+	"MTb",      -- Fire Totem duration < 3 sec (Magma Totem)
+	"LL",       -- Lava Lash
+	"LSb"       -- fallback Lightning Shield (Lightning Shield)
 }
 
 --[[ Ok, don't mess with anything below this (unless you know what you're doing ofc) ]]--
 
-
--- initialize the variables (make them globals)
-local BetterEnhaPrio = LibStub( "AceAddon-3.0" ):NewAddon( "BetterEnhaPrio", "AceConsole-3.0", "AceEvent-3.0" );
+-- initialize the variables (make them locals)
+local BetterEnhaPrio = LibStub("AceAddon-3.0"):NewAddon("BetterEnhaPrio", "AceConsole-3.0", "AceEvent-3.0");
 local LBF = LibStub("LibButtonFacade", true);
+local Group;
 if LBF then
-    Group = LBF:Group("BetterEnhaPrio");
+	Group = LBF:Group("BetterEnhaPrio");
 end
-local mainFrame, target, skins;
+local mainFrame;
 local maxQueueSize = 8;
 local queue = {};
 local cdqueue = {};
 
 local safety = 0.015;
 
--- Conditionning
+-- conditions
 local isEnha = false;
 
 -- targets 
@@ -116,11 +116,11 @@ local mwAmount = 0;
 
 -- button facade
 -- Save the settings to the appropriate section in the saved variables file.
-function BetterEnhaPrio:SkinCallback(SkinID, Gloss, Backdrop, grp, Button, Colors)
-        self.db.char.bf.SkinID = SkinID
-        self.db.char.bf.Gloss = Gloss
-        self.db.char.bf.Backdrop = Backdrop
-        self.db.char.bf.Colors = Colors
+function BetterEnhaPrio:SkinCallback(SkinID, Gloss, Backdrop, _, _, Colors)
+	self.db.char.bf.SkinID = SkinID
+	self.db.char.bf.Gloss = Gloss
+	self.db.char.bf.Backdrop = Backdrop
+	self.db.char.bf.Colors = Colors
 end
 
 -- configs (default values)
@@ -190,88 +190,88 @@ local ActionsMono = {
 	
 	FT = function ()
 		if not hasOH then
-			addToQueue(Spells.FT.name);
+			_addToQueue(Spells.FT.name)
 		end
 	end,
 
 	SR = function (GCDduration)
 		-- do shamanistic rage
 		if lowMana and melee and isGCDReady(Spells.SR.name, GCDduration) then
-			addToQueue(Spells.SR.name);
+			_addToQueue(Spells.SR.name)
 		end
 	end,
 
 	LB = function ()
-    	if MWfull and ranged then
-        	addToQueue(Spells.LB.name);
-    	end
+		if MWfull and ranged then
+			_addToQueue(Spells.LB.name)
+		end
 	end,
-	
+
 	MT = function ()
 		-- magma totem
 		if noFT then
-			addToQueue(Spells.MT.name);
+			_addToQueue(Spells.MT.name)
 		end
 	end,
 
 	SSb = function (GCDduration)
 		-- if the target doesn't have your ss buff on, do it
 		if SsLeft < GCDduration and melee and isGCDReady(Spells.SS.name, GCDduration) then
-			addToQueue(Spells.SS.name);
+			_addToQueue(Spells.SS.name)
 		end
 	end,
 
 	FS = function (GCDduration)
 		-- if there is under 1.5sec left on flame shock on the target
 		if ranged and fsLeft < GCDduration and isGCDReady(Spells.FS.name, GCDduration) then
-			addToQueue(Spells.FS.name);
+			_addToQueue(Spells.FS.name)
 		end
 	end,
-	
+
 	LS = function ()
 		-- lightningshield
 		if noLS then
-			addToQueue(Spells.LS.name);
+			_addToQueue(Spells.LS.name)
 		end
 	end,
-	
-	SS = function (GCDduration) 
+
+	SS = function (GCDduration)
 		-- Stormstrike
 		if melee and isGCDReady(Spells.SS.name, GCDduration) then
-			addToQueue(Spells.SS.name);
+			_addToQueue(Spells.SS.name)
 		end
 	end,
 
 	ES = function (GCDduration)
 		-- earth shock
 		if ranged and fsLeft > 6 - GCDduration and isGCDReady(Spells.ES.name, GCDduration) then
-			addToQueue(Spells.ES.name);
+			_addToQueue(Spells.ES.name)
 		end
 	end,
-	
+
 	FN = function (GCDduration)
 		-- fire nova
-		if not noFT and FtLeft > GCDduration and isGCDReady(Spells.FN.name, GCDduration)  then
-			addToQueue(Spells.FN.name);
+		if not noFT and FtLeft > GCDduration and isGCDReady(Spells.FN.name, GCDduration) then
+			_addToQueue(Spells.FN.name)
 		end
 	end,
 
 	LL = function (GCDduration)
 		-- lava lash
 		if melee and isGCDReady(Spells.LL.name, GCDduration) then
-			addToQueue(Spells.LL.name);
+			_addToQueue(Spells.LL.name)
 		end
 	end,
 
 	MTb = function (GCDduration)
 		-- Magma totem
 		if FtLeft < GCDduration + 3 then
-			addToQueue(Spells.MT.name);
+			_addToQueue(Spells.MT.name)
 		end
 	end,
 
 	LSb = function ()
-		addToQueue(Spells.LS.name);
+		_addToQueue(Spells.LS.name)
 	end
 }
 
@@ -279,94 +279,94 @@ local ActionsAOE = {
 
 	WF = function ()
 		if not hasMH then
-			addToQueue(Spells.WF.name);
+			_addToQueue(Spells.WF.name)
 		end
 	end,
-	
+
 	FT = function ()
 		if not hasOH then
-			addToQueue(Spells.FT.name);
+			_addToQueue(Spells.FT.name)
 		end
 	end,
 
 	SR = function (GCDduration)
 		-- do shamanistic rage
 		if lowMana and melee and isGCDReady(Spells.SR.name, GCDduration) then
-			addToQueue(Spells.SR.name);
+			_addToQueue(Spells.SR.name)
 		end
 	end,
-	
+
 	MT = function ()
 		-- magma totem
 		if noFT then
-			addToQueue(Spells.MT.name);
+			_addToQueue(Spells.MT.name)
 		end
 	end,
 
 	FN = function (GCDduration)
 		-- fire nova
 		if not lowMana and noFT and FtLeft >= GCDduration and isGCDReady(Spells.FN.name, GCDduration) then
-			addToQueue(Spells.FN.name);
+			_addToQueue(Spells.FN.name)
 		end
 	end,
 
 	CL = function (GCDduration)
-    	if MWfull and isGCDReady(Spells.CL.name, GCDduration) and ranged then
-        	addToQueue(Spells.CL.name);
-    	end
+		if MWfull and isGCDReady(Spells.CL.name, GCDduration) and ranged then
+			_addToQueue(Spells.CL.name)
+		end
 	end,
 
 	SSb = function (GCDduration)
 		-- if the target doesn't have your ss buff on, do it
 		if SsLeft < GCDduration and melee and isGCDReady(Spells.SS.name, GCDduration) then
-			addToQueue(Spells.SS.name);
+			_addToQueue(Spells.SS.name)
 		end
 	end,
 
 	FS = function (GCDduration)
 		-- if there is under 1.5sec left on flame shock on the target
 		if ranged and fsLeft <= GCDduration and isGCDReady(Spells.FS.name, GCDduration) then
-			addToQueue(Spells.FS.name);
+			_addToQueue(Spells.FS.name)
 		end
 	end,
-	
+
 	LS = function ()
 		-- lightningshield
 		if noLS then
-			addToQueue(Spells.LS.name);
+			_addToQueue(Spells.LS.name)
 		end
 	end,
-	
-	SS = function (GCDduration) 
+
+	SS = function (GCDduration)
 		-- Stormstrike
 		if melee and isGCDReady(Spells.SS.name, GCDduration) then
-			addToQueue(Spells.SS.name);
+			_addToQueue(Spells.SS.name)
 		end
 	end,
 
 	ES = function (GCDduration)
 		-- earth shock
 		if ranged and fsLeft > 6 - GCDduration and isGCDReady(Spells.ES.name, GCDduration) then
-			addToQueue(Spells.ES.name);
+			_addToQueue(Spells.ES.name)
 		end
 	end,
 
 	MTb = function (GCDduration)
 		-- Maintaining magma totem
 		if FtLeft <= GCDduration + 3 then
-			addToQueue(Spells.MT.name);
+			_addToQueue(Spells.MT.name)
 		end
 	end,
 
 	LL = function (GCDduration)
 		-- lava lash
 		if melee and isGCDReady(Spells.LL.name, GCDduration) then
-			addToQueue(Spells.LL.name);
+			_addToQueue(Spells.LL.name)
 		end
 	end,
 
 	LSb = function ()
-		addToQueue(Spells.LS.name);
+		_addToQueue(Spells.LS.name)
 	end
 }
 
@@ -379,9 +379,9 @@ local Cooldowns = {
 local function makeCDQueue()
 	local cdq = {};
 	for i, n in pairs(Cooldowns) do
-		if getCD(n) > 0 then
-		    if (n ~= "MT" and n ~= "FN") or ((n == "MT" or n == "FN") and BetterEnhaPrio.db.char.enableAOE) then
-				table.insert(cdq, n);
+		if _getCD(n) > 0 then
+			if (n ~= "MT" and n ~= "FN") or ((n == "MT" or n == "FN") and BetterEnhaPrio.db.char.enableAOE) then
+				table.insert(cdq, n)
 			end
 		end
 	end
@@ -392,99 +392,93 @@ local function makeCDQueue()
 		-- if the difference between cooldowns is less than a second,
 		-- treat them as having the same cd (so priority should come
 		-- from the priority list)
-		if math.abs(getCD(a) - getCD(b)) < 0.5 then
-		
+		if math.abs(_getCD(a) - _getCD(b)) < 0.5 then
+
 			if a == "SS" and ssDebuff then a = "SSb" end
 			if b == "SS" and ssDebuff then b = "SSb" end
 			local Priority = BetterEnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
-			
-		  	for i, v in ipairs(Priority) do
-		  		if v == a then av = i end
-		  		if v == b then bv = i end
-		  	end
-		  	return av < bv;
+
+			local av, bv
+			for i, v in ipairs(Priority) do
+				if v == a then av = i end
+				if v == b then bv = i end
+			end
+			return av < bv
 		else
-			return getCD(a) < getCD(b);
+			return _getCD(a) < _getCD(b)
 		end
 	end
 	
-	table.sort(cdq, sorter);
-	cdqueue = {};
+	table.sort(cdq, sorter)
+	cdqueue = {}
 	for i, n in ipairs(cdq) do
-		table.insert(cdqueue, Spells[n].name);
+		table.insert(cdqueue, Spells[n].name)
 	end
 end
 
 -- get the time when the spell should be cast again (used for cd queue)
-function getCD(n)
-	local start, duration;
-	
-	-- gcd control
-	gcdstart, gcdduration = GetSpellCooldown(Spells.LB.name);
-	gcdtime = gcdstart + gcdduration;
+local function _getCD(n)
+	local start, duration
+	local gcdstart, gcdduration = GetSpellCooldown(Spells.LB.name)
+	local gcdtime = gcdstart + gcdduration
 	
 	if n == "FE" or n == "MT" then
-		_, _, start, duration = GetTotemInfo(1);
+		_, _, start, duration = GetTotemInfo(1)
 	else
-		start, duration = GetSpellCooldown(Spells[n].name);
+		start, duration = GetSpellCooldown(Spells[n].name)
 	end
-	
-	local left = start + duration - GetTime();
-	
+
+	local left = start + duration - GetTime()
+
 	if n == "ES" and left >= (fsLeft - 3) then
-		duration = 0;
+		duration = 0
 	end
 	if n == "FS" and left < (fsLeft - 3) then
-		duration = 0;
+		duration = 0
 	end
-	
+
 	if n == "FN" and noFT then
-		duration = 0;
+		duration = 0
 	end
-	
+
 	if duration > 0 and (start + duration) > gcdtime then
-		return start + duration;
+		return start + duration
 	else
-		return 0;
+		return 0
 	end
 end
 
 
 -- can you cast that spell
 function isCastable(spellName)
-	-- check if you can cast that spell in one gcd
-	local _, GCD = GetSpellCooldown(Spells.LB.name);
-	local _, duration = GetSpellCooldown(spellName);
-	return duration == GCD;
-end
-
+	-- heck if you can cast that spell in one gcd
+local function _isCastable(spellName)
+	local _, GCD = GetSpellCooldown(Spells.LB.name)
+	local _, duration = GetSpellCooldown(spellName)
+	return duration == GCD
 -- add a spell to the queue
 function addToQueue(spell)
 	queue[#queue+1] = spell;
 end
-
--- round a number (odd that lua doesn't have that in standard classes)
+local function _addToQueue(spell)
+	queue[#queue + 1] = spellat lua doesn't have that in standard classes)
 function round(num, idp)
   local mult = 10^(idp or 0)
-  return math.floor(num * mult + 0.5) / mult
-end
-
--- Gets time before the GCD is over
+  return math.flooto specified decimal places
+local function _round(num, idp)
+	local mult = 10 ^ (idp or 0)
+	 Gets time before the GCD is over
 local function getGCDduration()
 	local _, GCD = GetSpellCooldown(Spells.LB.name)  -- assume LB is baseline for GCD
-	if not GCD then
-        return 0;
-    end;
-	return GCD;
-end
-
--- refreshes the queue according to the priorities
+	ifget time remaining before GCD is over
+local function _getGCDduration()
+	local _, GCD = GetSpellCooldown(Spells.LB.name)
+	return GCD or 0 the queue according to the priorities
 -- check stuff and then run the queue
 function refreshQueue() 
 	
-	-- players buffs (maelstrom, lightning shield)
-	noLS = true;
-	MWfull = false;
+	-- player the queue according to priorities and current state
+local function _ false;
 	FtLeft = 0;
 	for i=1,40 do
 		local name, _, _, count = UnitBuff("player", i);
@@ -543,12 +537,12 @@ function refreshQueue()
 	local Actions = BetterEnhaPrio.db.char.enableAOE and ActionsAOE or ActionsMono
 	local Priority = BetterEnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
 	for i, v in ipairs(Priority) do
-		Actions[v](GCDduration);
-	end
-end
-
-function BetterEnhaPrio:reCalculate()
-	-- check if the target is hostile and you are not mounted or on a vehicle or dead
+		Actions[v](GCDdurat_getGCDduration()
+	-- now loop through the actions
+	local Actions = BetterEnhaPrio.db.char.enableAOE and ActionsAOE or ActionsMono
+	local Priority = BetterEnhaPrio.db.char.enableAOE and PriorityAOE or PriorityMono
+	for i, v in ipairs(Priority) do
+		Actions[v](GCDduration) hostile and you are not mounted or on a vehicle or dead
 	queue = {};
 	hostile = UnitName("target") and UnitCanAttack("player","target") and UnitHealth("target") > 0;
 	dead = UnitHealth("target") < 1;
@@ -561,9 +555,9 @@ function BetterEnhaPrio:reCalculate()
 		refreshQueue();
 		makeCDQueue();
 	
-	    -- show maelstrom wep
-	    if self.db.char.displayMW and mwAmount > 0 and ranged then
-	        mainFrame.text:SetText(mwAmount);
+		timeLeft = self.db.char.updateFrequency
+		_refreshQueue()
+		makeCDQueue()me.text:SetText(mwAmount);
 	        if mwAmount == 1 then
 	        	mainFrame.text:SetTextColor(1, 1, 1, 1);
 			elseif mwAmount == 2 then
@@ -614,30 +608,30 @@ function BetterEnhaPrio:reCalculate()
 					-- normal skills
 					f.spellTexture:SetTexture(GetSpellTexture(spell));
 					check(f, spell);
-					if i > 1 then CooldownFrame_SetTimer(f.cooldown, 0, 0, 0) end
-					f.cooldownText:SetText("");
-					f:SetAlpha(1);
-	    			f:Show();
-    			else
-    				-- normal queue ended, going on cooldowns
-					f.spellTexture:SetTexture(GetSpellTexture(spell));
-					local start, duration;
-					if spell == Spells.MT.name then
-						_, _, start, duration = GetTotemInfo(1);
-					else
-						start, duration = GetSpellCooldown(spell);
-					end
-					check(f, spell);
-				    CooldownFrame_SetTimer(f.cooldown, start, duration, 1);
-				    local left = round(start + duration - GetTime());
-				    if left > 0 then f.cooldownText:SetText(left) else f.cooldownText:SetText("") end
-				    f:SetAlpha(0.7);
-					f:Show();
-				end
-    			
+			if i <= tillcd then
+				-- normal skills
+				f.spellTexture:SetTexture(GetSpellTexture(spell))
+				_check(f, spell)
+				if i > 1 then CooldownFrame_SetTimer(f.cooldown, 0, 0, 0) end
+				f.cooldownText:SetText("")
+				f:SetAlpha(1)
+				f:Show()
 			else
-				-- nothing left in the queues
-				f.spellTexture:SetTexture(nil);
+				-- normal queue ended, going on cooldowns
+				f.spellTexture:SetTexture(GetSpellTexture(spell))
+				local start, duration
+				if spell == Spells.MT.name then
+					_, _, start, duration = GetTotemInfo(1)
+				else
+					start, duration = GetSpellCooldown(spell)
+				end
+				_check(f, spell)
+				CooldownFrame_SetTimer(f.cooldown, start, duration, 1)
+				local left = _round(start + duration - GetTime())
+				if left > 0 then f.cooldownText:SetText(left) else f.cooldownText:SetText("") end
+				f:SetAlpha(0.7)
+				f:Show()
+			f.spellTexture:SetTexture(nil);
 				f.cooldownText:SetText("");
 				f:SetAlpha(1);
     			f:Hide();
@@ -660,18 +654,14 @@ function BetterEnhaPrio:reCalculate()
 end
 
 -- check for out of mana or out of range
-function check(f, spell)
-	name, _, _, cost = GetSpellInfo(spell);
+local function _check(f, spell)
+	local name, _, _, cost = GetSpellInfo(spell)
 	if IsSpellInRange(spell, 'target') == 0 then
-	    f.spellTexture:SetVertexColor(1, 0, 0);
+		f.spellTexture:SetVertexColor(1, 0, 0)
 	elseif cost and UnitPower('player') < cost then
-	    f.spellTexture:SetVertexColor(0.4, 0.4, 0.4);
+		f.spellTexture:SetVertexColor(0.4, 0.4, 0.4)
 	else
-	    f.spellTexture:SetVertexColor(1, 1, 1);
-	end
-end
-
--- functions to take care of the addon (visuals and saving etc)
+		f.spellTexture:SetVertexColor(1, 1, 1)als and saving etc)
 function BetterEnhaPrio:SaveLocation()
 	point, relativeTo, relativePoint, xOfs, yOfs = mainFrame:GetPoint();
 	self.db.char.x = xOfs;
@@ -766,9 +756,9 @@ end
 function swPrint(s)
     DEFAULT_CHAT_FRAME:AddMessage("BetterEnhaPrio: ".. tostring(s));
 end
-
-
---- on initialize
+addon message to chat frame
+local function _swPrint(s)
+	DEFAULT_CHAT_FRAME:AddMessage("BetterEnhaPrio: " .. tostring(s))
 function BetterEnhaPrio:OnInitialize()
 	local AceConfigReg = LibStub("AceConfigRegistry-3.0")
 	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
@@ -983,6 +973,7 @@ function BetterEnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
 		local CDstart, CD = GetSpellCooldown(Spells.CL.name);
 		if (CD <= GCD) -- Doesn't update mode if Chain Lighting is in CD considering it might be a false positive
         	self.db.char.enableAOE = false
+		end
 	end
 	self:UpdateAOEText()
 end
