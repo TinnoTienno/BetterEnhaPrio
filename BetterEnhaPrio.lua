@@ -91,10 +91,6 @@ PriorityAOE = {
 
 -- initialize the variables (make them globals)
 local BetterEnhaPrio = LibStub( "AceAddon-3.0" ):NewAddon( "BetterEnhaPrio", "AceConsole-3.0", "AceEvent-3.0" );
-local LBF = LibStub("LibButtonFacade", true);
-if LBF then
-    Group = LBF:Group("BetterEnhaPrio");
-end
 local mainFrame, target, skins;
 local maxQueueSize = 8;
 local queue = {};
@@ -131,6 +127,8 @@ local noLS = false;
 local timeLeft = 0;
 local mwAmount = 0;
 
+local CLoncd = false;
+
 
 
 -- button facade
@@ -159,6 +157,7 @@ local defaults = {
 		displayGCD = true,
 		enableAOE = true,
 		enableLongCD = true,
+		enableManaRegen = false,
         bf = {
             SkinID = "Blizzard",
             Gloss = 0,
@@ -191,11 +190,10 @@ local Spells = {
 
 local function isGCDReady(spellName, GCDduration)
     local start, duration = GetSpellCooldown(spellName)
-    local cdLeft = (start + duration) - GetTime()
-    local _, _, latencyHome, _ = GetNetStats()
-    local latency = latencyHome/1000 + safety -- 15ms safety
-
-    return cdLeft - GCDduration - latency <= 0
+    local spellTrueCD = (start + duration) - GetTime()
+    -- local _, _, latencyHome, _ = GetNetStats()
+    -- local latency = latencyHome/1000 + safety -- 15ms safety
+    return spellTrueCD <= GCDduration
 end
 
 -- here are the different actions (adding stuff to queue according to the situation)
@@ -215,7 +213,9 @@ local ActionsMono = {
 
 	SR = function (GCDduration)
 		-- do shamanistic rage
-		if lowMana and melee and isGCDReady(Spells.SR.name, GCDduration) then
+		if BetterEnhaPrio.db.char.enableManaRegen and lowMana and melee and isGCDReady(Spells.SR.name, GCDduration) then
+			addToQueue(Spells.SR.name);
+		elseif melee and isGCDReady(Spells.SR.name, GCDduration) then
 			addToQueue(Spells.SR.name);
 		end
 	end,
@@ -270,7 +270,7 @@ local ActionsMono = {
 	
 	FN = function (GCDduration)
 		-- fire nova
-		if not noFT and FtLeft > GCDduration and isGCDReady(Spells.FN.name, GCDduration)  then
+		if not lowMana and not noFT and FtLeft > GCDduration and isGCDReady(Spells.FN.name, GCDduration) then
 			addToQueue(Spells.FN.name);
 		end
 	end,
@@ -324,7 +324,7 @@ local ActionsAOE = {
 
 	FN = function (GCDduration)
 		-- fire nova
-		if not lowMana and noFT and FtLeft >= GCDduration and isGCDReady(Spells.FN.name, GCDduration) then
+		if not lowMana and FtLeft >= GCDduration and isGCDReady(Spells.FN.name, GCDduration) then
 			addToQueue(Spells.FN.name);
 		end
 	end,
@@ -430,7 +430,18 @@ local function makeCDQueue()
 	table.sort(cdq, sorter);
 	cdqueue = {};
 	for i, n in ipairs(cdq) do
-		table.insert(cdqueue, Spells[n].name);
+		-- Check if spell is already in the normal queue
+		local alreadyInQueue = false;
+		for j = 1, #queue do
+			if queue[j] == Spells[n].name then
+				alreadyInQueue = true;
+				break;
+			end
+		end
+		-- Only add to CD queue if not already displayed
+		if not alreadyInQueue then
+			table.insert(cdqueue, Spells[n].name);
+		end
 	end
 end
 
@@ -450,10 +461,10 @@ function getCD(n)
 	
 	local left = start + duration - GetTime();
 	
-	if n == "ES" and left >= (fsLeft - 3) then
+	if n == "ES" and left >= (fsLeft - 6) then
 		duration = 0;
 	end
-	if n == "FS" and left < (fsLeft - 3) then
+	if n == "FS" and left < (fsLeft - 6) then
 		duration = 0;
 	end
 	
@@ -490,12 +501,13 @@ end
 
 -- Gets time before the GCD is over
 local function getGCDduration()
-	local _, GCD = GetSpellCooldown(Spells.LB.name)  -- assume LB is baseline for GCD
+	local time, GCD = GetSpellCooldown(Spells.LB.name)  -- assume LB is baseline for GCD
 	if not GCD then
         return 0;
     end;
-	return GCD;
+	return GCD + time - GetTime();
 end
+
 
 -- refreshes the queue according to the priorities
 -- check stuff and then run the queue
@@ -505,6 +517,7 @@ function refreshQueue()
 	noLS = true;
 	MWfull = false;
 	FtLeft = 0;
+	FNcd = 0;
 	for i=1,40 do
 		local name, _, _, count = UnitBuff("player", i);
 		if not name then
@@ -516,7 +529,6 @@ function refreshQueue()
 			noLS = false;
 		end
 	end
-	
 	-- targets debuffs (fire shock)
 	SsLeft = 0;
 	fsLeft = 0;
@@ -599,26 +611,6 @@ function BetterEnhaPrio:reCalculate()
 		    mainFrame.text:SetText("");
 	    end
 	    
-	    -- wolf and ele
-	    if self.db.char.enableLongCD then
-	    	if isCastable(mainFrame.wolf.id) and ranged then
-	    		mainFrame.wolf.texture:SetTexture(GetSpellTexture("Feral Spirit"));
-				mainFrame.wolf:Show();
-			else
-				mainFrame.wolf.texture:SetTexture(nil);
-				mainFrame.wolf:Hide();
-			end
-			if isCastable(mainFrame.elemental.id) and ranged then
-				mainFrame.elemental.texture:SetTexture(GetSpellTexture("Fire Elemental Totem"));
-				mainFrame.elemental:Show();
-			else
-				mainFrame.elemental.texture:SetTexture(nil);
-				mainFrame.elemental:Hide();
-			end
-	    end
-	    
-	    
-	    
 	    -- merge the normal and cd queues
 	    local tillcd = #queue;
 	    for i, n in ipairs(cdqueue) do table.insert(queue, n) end
@@ -671,11 +663,6 @@ function BetterEnhaPrio:reCalculate()
 			f.spellTexture:SetTexture(nil);
 			f:Hide();
 		end
-		
-		mainFrame.text:SetText("");
-		mainFrame.AOEtext:SetText("");
-		mainFrame.wolf:Hide();
-		mainFrame.elemental:Hide();
 	end
 end
 
@@ -713,8 +700,6 @@ function BetterEnhaPrio:RepositionFrames(queue)
 	    for i, f in ipairs(spellQueueFrames) do
 	  		f:Hide();
 		end
-		mainFrame.wolf:Hide();
-		mainFrame.elemental:Hide();
 	end
 	
 	-- text
@@ -734,22 +719,6 @@ function BetterEnhaPrio:RepositionFrames(queue)
 	else
 		mainFrame.AOEtext:SetPoint("BOTTOM", mainFrame, "TOP", 0, spacing);
 	end
-    	
-	-- wolf and elemental frames
-	mainFrame.wolf:SetWidth(self.db.char.size / 2)
-	mainFrame.wolf:SetHeight(self.db.char.size / 2)
-	mainFrame.wolf:ClearAllPoints();
-	mainFrame.elemental:SetWidth(self.db.char.size / 2)
-	mainFrame.elemental:SetHeight(self.db.char.size / 2)
-	mainFrame.elemental:ClearAllPoints();
-	if self.db.char.queueDirection == "DOWN" or self.db.char.queueDirection == "UP" then
-		mainFrame.wolf:SetPoint("TOPLEFT", mainFrame, "TOPRIGHT", spacing, 0);
-	    mainFrame.elemental:SetPoint("BOTTOMLEFT", mainFrame, "BOTTOMRIGHT", spacing, 0);
-	else
-	    mainFrame.wolf:SetPoint("TOPLEFT", mainFrame, "BOTTOMLEFT", 0, (spacing * -1));
-	    mainFrame.elemental:SetPoint("TOPRIGHT", mainFrame, "BOTTOMRIGHT", 0, (spacing * -1));
-	end
-    	
     	
 	-- buttons
 	for i=1,maxQueueSize do
@@ -776,10 +745,6 @@ function BetterEnhaPrio:RepositionFrames(queue)
 		end
 	end
 	
-	-- and reskin them
-	if LBF then
-	Group:Skin(self.db.char.bf.SkinID or "Blizzard", self.db.char.bf.Gloss, self.db.char.bf.Backdrop, self.db.char.bf.Colors);
-	end
 end
 
 -- print something to window
@@ -787,19 +752,8 @@ function swPrint(s)
     DEFAULT_CHAT_FRAME:AddMessage("BetterEnhaPrio: ".. tostring(s));
 end
 
-
---- on initialize
-function BetterEnhaPrio:OnInitialize()
-	local AceConfigReg = LibStub("AceConfigRegistry-3.0")
-	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
-	
-	-- register shit
-	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
-	LibStub("AceConfig-3.0"):RegisterOptionsTable("BetterEnhaPrio", self:GetOptions(), {"BetterEnhaPrio", "fin"} )
-	self.optionsFrame = AceConfigDialog:AddToBlizOptions("BetterEnhaPrio","BetterEnhaPrio")
-	self.db:RegisterDefaults(defaults);
-
-	-- create the main frame and configure it
+-- create the main frame and configure it
+function BetterEnhaPrio:setMainFrame()
 	mainFrame = CreateFrame("Frame","BetterEnhaPrioDisplayFrame",UIParent)
 	mainFrame:SetFrameStrata("BACKGROUND")
 	mainFrame:SetWidth(self.db.char.size)
@@ -824,10 +778,23 @@ function BetterEnhaPrio:OnInitialize()
 		self:StopMovingOrSizing(); 
 		BetterEnhaPrio:SaveLocation(); 
 	end);
+	
 	mainFrame:ClearAllPoints();
 	mainFrame:SetPoint(self.db.char.relativePoint, self.db.char.x, self.db.char.y);
+end
+
+--- on initialize
+function BetterEnhaPrio:OnInitialize()
+	local AceConfigReg = LibStub("AceConfigRegistry-3.0")
+	local AceConfigDialog = LibStub("AceConfigDialog-3.0")
 	
-	if LBF then skins = LBF:GetSkins() end
+	-- register shit
+	self.db = LibStub("AceDB-3.0"):New("BetterEnhaPrioDB", defaults, "char")
+	LibStub("AceConfig-3.0"):RegisterOptionsTable("BetterEnhaPrio", self:GetOptions(), {"BetterEnhaPrio", "fin"} )
+	self.optionsFrame = AceConfigDialog:AddToBlizOptions("BetterEnhaPrio","BetterEnhaPrio")
+	self.db:RegisterDefaults(defaults);
+
+	self:setMainFrame()
 
 	-- let's create the individual frames for the icons
 	spellQueueFrames = {};
@@ -852,40 +819,7 @@ function BetterEnhaPrio:OnInitialize()
 		f.cooldownText:SetAllPoints();
 		f.cooldownText:SetTextColor(1, 1, 1, 1);
 		spellQueueFrames[i] = f;
-
-        if LBF then Group:AddButton(f, {Icon = f.spellTexture, Cooldown = f.cooldown}) end
 	end
-	
-	-- frames for wolf and elemental
-	mainFrame.wolf = CreateFrame("Button", "BetterEnhaPrioFeralSpiritButton", mainFrame);
-	mainFrame.wolf.id = 51533;
-	mainFrame.wolf.texture = mainFrame.wolf:CreateTexture(nil,"BACKGROUND");
-	mainFrame.wolf.texture:SetAllPoints(mainFrame.wolf);
-	mainFrame.wolf.texture:SetTexture(GetSpellTexture("Feral Spirit"));
-	mainFrame.wolf:SetWidth(self.db.char.size / 2);
-	mainFrame.wolf:SetHeight(self.db.char.size / 2);
-	mainFrame.wolf:EnableMouse(false);
-	mainFrame.wolf:SetMovable(false);
-	mainFrame.wolf:SetClampedToScreen(true);
-	mainFrame.wolf:ClearAllPoints();
-	
-	mainFrame.elemental = CreateFrame("Button", "BetterEnhaPrioFireElementalButton", mainFrame);
-	mainFrame.elemental.id = 2894;
-	mainFrame.elemental.texture = mainFrame.elemental:CreateTexture(nil,"BACKGROUND");
-	mainFrame.elemental.texture:SetAllPoints(mainFrame.elemental);
-	mainFrame.elemental.texture:SetTexture(GetSpellTexture("Fire Elemental Totem"));
-	mainFrame.elemental:SetWidth(self.db.char.size / 2);
-	mainFrame.elemental:SetHeight(self.db.char.size / 2);
-	mainFrame.elemental:EnableMouse(false);
-	mainFrame.elemental:SetMovable(false);
-	mainFrame.elemental:SetClampedToScreen(true);
-	mainFrame.elemental:ClearAllPoints();
-	
-	if LBF then 
-		Group:AddButton(mainFrame.wolf, {Icon = mainFrame.wolf.texture});
-		Group:AddButton(mainFrame.elemental, {Icon = mainFrame.elemental.texture}); 
-	end
-	
 	
 	-- text for maelstrom
 	mainFrame.text = mainFrame:CreateFontString(nil,"OVERLAY")
@@ -905,10 +839,10 @@ function BetterEnhaPrio:OnEnable()
 	local playerClass, englishClass = UnitClass("player");
 	if UnitLevel('player') < 80 then
 	    swPrint('Only lvl80 characters are supported.');
-		mainFrame:Hide();
+		if mainFrame then mainFrame:Hide() end
 	elseif englishClass ~= 'SHAMAN' then
 		swPrint('You are not a shaman. Please reroll a shaman.');
-		mainFrame:Hide();
+		if mainFrame then mainFrame:Hide() end
 	else
 		playerId = UnitGUID("player");
 		
@@ -922,17 +856,15 @@ function BetterEnhaPrio:OnEnable()
 		self:RegisterEvent("SPELL_UPDATE_COOLDOWN");
 		self:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
 		self:UpdateAOEText();
-		mainFrame:SetScript('OnUpdate', function(self, timeSinceLast)
-			timeLeft = timeLeft - timeSinceLast;
-			if timeLeft <= 0 then
-				BetterEnhaPrio:reCalculate();
-			end
-		end);
+		if mainFrame then
+			mainFrame:SetScript('OnUpdate', function(self, timeSinceLast)
+				timeLeft = timeLeft - timeSinceLast;
+				if timeLeft <= 0 then
+					BetterEnhaPrio:reCalculate();
+				end
+			end);
+		end
 		
-        if LBF then
-        LBF:RegisterSkinCallback("BetterEnhaPrio", self.SkinCallback, self);
-        end
-
 		-- Register chat commands.
 		self:RegisterChatCommand("ep", function() self:OpenOptions() end);
 		self:RegisterChatCommand("Betterenhaprio", function() self:OpenOptions() end);
@@ -973,7 +905,9 @@ function BetterEnhaPrio:SetProperty(info, newValue)
 end
 
 function BetterEnhaPrio:UpdateAOEText()
-    mainFrame.AOEtext:SetText(self.db.char.enableAOE and "AOE" or "")
+    if mainFrame and mainFrame.AOEtext then
+        mainFrame.AOEtext:SetText(self.db.char.enableAOE and "AOE" or "")
+    end
 end
 
 
@@ -996,10 +930,20 @@ function BetterEnhaPrio:SPELL_UPDATE_COOLDOWN(...)
 	end
 end
 
+local function IsSpellOnRealCooldown(spellName)
+	local start, duration = GetSpellCooldown(spellName)
+    if not start or duration == 0 then
+        return false
+    end
+    local gcdStart, gcdDuration = GetSpellCooldown(Spells.LB.name)
+    return duration > gcdDuration
+end
+
 function BetterEnhaPrio:UNIT_SPELLCAST_SUCCEEDED (_, unitID, spell, _, _, _)
     if unitID ~= "player" then 
 		return 
 	end
+	CLoncd = IsSpellOnRealCooldown(Spells.CL.name)
     if spell == Spells.CL.name then
         self.db.char.enableAOE = true
     elseif spell == Spells.LB.name and not CLoncd then
@@ -1126,13 +1070,13 @@ function BetterEnhaPrio:GetOptions()
 						set = "SetProperty",
 						order = 4
 					},
-					enableLongCD = {
+					enableManaRegen = {
 						type = 'toggle',
-						name = "Track Long CD Spells",
-						desc = "Show or hide small icons for Feral Spirit and Fire Elemental Totem.",
+						name = "Mana regen priority",
+						desc = "Uses Shamanistic rage as a mana regen tool instead of an offensive cooldown",
 						get = "GetProperty",
 						set = "SetProperty",
-						order = 5
+						order = 6
 					}
 			    }
 			}
