@@ -126,6 +126,7 @@ local noLS = false;
 
 local timeLeft = 0;
 local mwAmount = 0;
+local lsAmount = 0;
 
 local CLoncd = false;
 
@@ -226,9 +227,9 @@ local ActionsMono = {
     	end
 	end,
 	
-	MT = function ()
+	MT = function (GCDduration)
 		-- magma totem
-		if noFT then
+		if noFT or GCDduration > FtLeft then
 			addToQueue(Spells.MT.name);
 		end
 	end, 
@@ -263,7 +264,7 @@ local ActionsMono = {
 
 	ES = function (GCDduration)
 		-- earth shock
-		if ranged and fsLeft > 6 - GCDduration and isGCDReady(Spells.ES.name, GCDduration) then
+		if ranged and fsLeft > 2 - GCDduration and isGCDReady(Spells.ES.name, GCDduration) then
 			addToQueue(Spells.ES.name);
 		end
 	end,
@@ -315,9 +316,9 @@ local ActionsAOE = {
 		end
 	end,
 	
-	MT = function ()
+	MT = function (GCDduration)
 		-- magma totem
-		if noFT then
+		if noFT or GCDduration > FtLeft then
 			addToQueue(Spells.MT.name);
 		end
 	end,
@@ -488,8 +489,13 @@ function isCastable(spellName)
 	return duration == GCD;
 end
 
--- add a spell to the queue
+-- add a spell to the queue (without duplicates)
 function addToQueue(spell)
+	for i = 1, #queue do
+		if queue[i] == spell then
+			return; -- spell already in queue
+		end
+	end
 	queue[#queue+1] = spell;
 end
 
@@ -515,6 +521,7 @@ function refreshQueue()
 	
 	-- players buffs (maelstrom, lightning shield)
 	noLS = true;
+	lsAmount = 0;
 	MWfull = false;
 	FtLeft = 0;
 	FNcd = 0;
@@ -527,6 +534,7 @@ function refreshQueue()
 		    MWfull = true;
 		elseif name == Spells.LS.name then
 			noLS = false;
+			lsAmount = count;
 		end
 	end
 	-- targets debuffs (fire shock)
@@ -628,6 +636,12 @@ function BetterEnhaPrio:reCalculate()
 					check(f, spell);
 					if i > 1 then CooldownFrame_SetTimer(f.cooldown, 0, 0, 0) end
 					f.cooldownText:SetText("");
+					-- show LS stacks if this is the LS spell
+					if spell == Spells.LS.name then
+						f.stackText:SetText(lsAmount);
+					else
+						f.stackText:SetText("");
+					end
 					f:SetAlpha(1);
 	    			f:Show();
     			else
@@ -643,6 +657,7 @@ function BetterEnhaPrio:reCalculate()
 				    CooldownFrame_SetTimer(f.cooldown, start, duration, 1);
 				    local left = round(start + duration - GetTime());
 				    if left > 0 then f.cooldownText:SetText(left) else f.cooldownText:SetText("") end
+				    f.stackText:SetText("");
 				    f:SetAlpha(0.7);
 					f:Show();
 				end
@@ -651,6 +666,7 @@ function BetterEnhaPrio:reCalculate()
 				-- nothing left in the queues
 				f.spellTexture:SetTexture(nil);
 				f.cooldownText:SetText("");
+				f.stackText:SetText("");
 				f:SetAlpha(1);
     			f:Hide();
 			end
@@ -818,6 +834,10 @@ function BetterEnhaPrio:OnInitialize()
 		f.cooldownText:SetTextHeight(self.db.char.size / 3);
 		f.cooldownText:SetAllPoints();
 		f.cooldownText:SetTextColor(1, 1, 1, 1);
+		f.stackText = f:CreateFontString(nil, "OVERLAY");
+		f.stackText:SetFont("Fonts\\FRIZQT__.TTF", self.db.char.size / 4, "OUTLINE");
+		f.stackText:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -2, 2);
+		f.stackText:SetTextColor(1, 1, 0, 1);
 		spellQueueFrames[i] = f;
 	end
 	
